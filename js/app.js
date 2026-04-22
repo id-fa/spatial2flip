@@ -1,5 +1,5 @@
 import { Viewer } from './viewer.js';
-import { captureVR180PataPata, framesToWebP } from './converter.js';
+import { captureVR180PataPata, framesToVideo } from './converter.js';
 import { loadSpatialHeic } from './heic.js';
 
 const state = {
@@ -50,16 +50,31 @@ function init() {
   const previewBtn = document.getElementById('preview-button');
   const previewContainer = document.getElementById('preview-container');
   const previewImg = document.getElementById('preview-img');
+  const previewVideo = document.getElementById('preview-video');
   previewBtn.addEventListener('click', () => {
     const link = document.getElementById('download-link');
     if (!link.href) return;
     if (previewContainer.hidden) {
-      previewImg.src = link.href;
+      const isVideo = link.dataset.kind === 'video';
+      if (isVideo) {
+        previewVideo.src = link.href;
+        previewVideo.hidden = false;
+        previewImg.hidden = true;
+        previewImg.removeAttribute('src');
+      } else {
+        previewImg.src = link.href;
+        previewImg.hidden = false;
+        previewVideo.hidden = true;
+        previewVideo.pause();
+        previewVideo.removeAttribute('src');
+      }
       previewContainer.hidden = false;
       previewBtn.textContent = '■ プレビューを閉じる';
     } else {
       previewContainer.hidden = true;
       previewImg.removeAttribute('src');
+      previewVideo.pause();
+      previewVideo.removeAttribute('src');
       previewBtn.textContent = '▶ プレビュー';
     }
   });
@@ -138,9 +153,12 @@ function resetDownload() {
   const previewBtn = document.getElementById('preview-button');
   const previewContainer = document.getElementById('preview-container');
   const previewImg = document.getElementById('preview-img');
+  const previewVideo = document.getElementById('preview-video');
   previewBtn.hidden = true;
   previewContainer.hidden = true;
   previewImg.removeAttribute('src');
+  previewVideo.pause();
+  previewVideo.removeAttribute('src');
   previewBtn.textContent = '▶ プレビュー';
 }
 
@@ -205,13 +223,17 @@ async function handleConvert() {
       frames = result.frames;
     }
 
-    const webpBlob = await framesToWebP(
+    const outputFormat = document.getElementById('output-format').value || 'webp';
+    const formatLabel = outputFormat === 'mp4' ? 'MP4' : 'WebP';
+
+    const outBlob = await framesToVideo(
       frames,
       fps,
       quality,
+      outputFormat,
       (p) => {
         progressBar.value = 0.4 + p * 0.6;
-        progressText.textContent = `WebP エンコード中... ${Math.round(p * 100)}%`;
+        progressText.textContent = `${formatLabel} エンコード中... ${Math.round(p * 100)}%`;
       },
       (msg) => {
         progressText.textContent = msg;
@@ -219,17 +241,18 @@ async function handleConvert() {
     );
 
     progressBar.value = 1;
-    progressText.textContent = `完了: ${(webpBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム`;
+    progressText.textContent = `完了: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム`;
 
     const link = document.getElementById('download-link');
-    const url = URL.createObjectURL(webpBlob);
+    const url = URL.createObjectURL(outBlob);
     link.href = url;
     const prefix = isSpatial ? 'spatial_patapata'
       : is180 ? 'vr180_patapata'
       : 'rotation360';
-    link.download = `${prefix}_${timestamp()}.webp`;
-    link.textContent = `ダウンロード (${(webpBlob.size / 1024).toFixed(0)} KB)`;
+    link.download = `${prefix}_${timestamp()}.${outputFormat}`;
+    link.textContent = `ダウンロード (${(outBlob.size / 1024).toFixed(0)} KB)`;
     link.hidden = false;
+    link.dataset.kind = outputFormat === 'mp4' ? 'video' : 'image';
     document.getElementById('preview-button').hidden = false;
   } catch (err) {
     console.error(err);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>spatial2flip</title>
+  <title>360° Video Maker</title>
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
   {
@@ -13,19 +13,16 @@
     }
   }
   </script>
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-E05P3RLDS9"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
 
   gtag('config', 'G-E05P3RLDS9');
-</script>
-</head>
+</script></head>
 <body>
   <header>
-    <h1>spatial2flip</h1>
+    <h1>360° Video Maker</h1>
     <p class="subtitle">360°/VR画像 → ぐるっと一回転 WebP アニメーション</p>
   </header>
 
@@ -64,7 +61,16 @@
       </section>
 
       <section class="card">
-        <h2>動画変換（アニメーション WebP）</h2>
+        <h2>動画変換</h2>
+
+        <div class="options">
+          <label>出力形式
+            <select id="output-format">
+              <option value="webp" selected>アニメーション WebP</option>
+              <option value="mp4">MP4 (H.264)</option>
+            </select>
+          </label>
+        </div>
 
         <div id="convert-360-options" class="options">
           <label>回転時間
@@ -123,7 +129,8 @@
           <button id="preview-button" class="preview-btn" type="button" hidden>▶ プレビュー</button>
         </div>
         <div id="preview-container" hidden>
-          <img id="preview-img" alt="変換結果のプレビュー">
+          <img id="preview-img" alt="変換結果のプレビュー" hidden>
+          <video id="preview-video" controls autoplay loop muted playsinline hidden></video>
         </div>
       </section>
     </div>

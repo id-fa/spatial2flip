@@ -313,7 +313,8 @@ button.primary:disabled {
   text-align: center;
 }
 
-#preview-img {
+#preview-img,
+#preview-video {
   display: block;
   margin: 0 auto;
   max-width: 100%;
@@ -321,6 +322,11 @@ button.primary:disabled {
   object-fit: contain;
   background: #000;
   border-radius: 4px;
+}
+
+#preview-img[hidden],
+#preview-video[hidden] {
+  display: none;
 }
 
 footer {

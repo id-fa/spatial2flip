@@ -115,15 +115,25 @@ export async function captureVR180PataPata(image, format, options) {
 }
 
 /**
- * JPEG フレーム群をアニメーション WebP に変換。
+ * JPEG フレーム群を動画（アニメーション WebP または MP4）に変換。
+ *
+ * @param {Blob[]} frames
+ * @param {number} fps
+ * @param {number} quality  WebP: 0-100 (高いほど高画質) / MP4: 同値を内部で CRF に変換
+ * @param {'webp'|'mp4'} outputFormat
  */
-export async function framesToWebP(frames, fps, quality, onProgress, onStatus) {
+export async function framesToVideo(frames, fps, quality, outputFormat, onProgress, onStatus) {
   const { ffmpeg, fetchFile } = await loadFFmpeg(onStatus);
 
   const progressHandler = ({ progress }) => {
     if (onProgress) onProgress(Math.min(1, Math.max(0, progress)));
   };
   ffmpeg.on('progress', progressHandler);
+
+  const isMP4 = outputFormat === 'mp4';
+  const outName = isMP4 ? 'output.mp4' : 'output.webp';
+  const mimeType = isMP4 ? 'video/mp4' : 'image/webp';
+  const statusLabel = isMP4 ? 'MP4' : 'WebP';
 
   const names = [];
 
@@ -135,27 +145,53 @@ export async function framesToWebP(frames, fps, quality, onProgress, onStatus) {
       names.push(name);
     }
 
-    if (onStatus) onStatus('WebP にエンコード中...');
-    await ffmpeg.exec([
-      '-framerate', String(fps),
-      '-i', 'f%05d.jpg',
-      '-c:v', 'libwebp',
-      '-lossless', '0',
-      '-q:v', String(quality),
-      '-preset', 'default',
-      '-loop', '0',
-      '-an',
-      '-vsync', '0',
-      'output.webp',
-    ]);
+    if (onStatus) onStatus(`${statusLabel} にエンコード中...`);
 
-    const data = await ffmpeg.readFile('output.webp');
-    return new Blob([data.buffer], { type: 'image/webp' });
+    let args;
+    if (isMP4) {
+      // quality 0-100 を CRF 51-10 にマッピング（高画質ほど低 CRF）
+      const crf = Math.max(10, Math.min(40, Math.round(40 - (quality / 100) * 30)));
+      args = [
+        '-framerate', String(fps),
+        '-i', 'f%05d.jpg',
+        '-c:v', 'libx264',
+        '-preset', 'medium',
+        '-crf', String(crf),
+        '-pix_fmt', 'yuv420p',
+        // H.264 は偶数解像度必須。奇数サイズを来ても通るようパディング
+        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2',
+        '-movflags', '+faststart',
+        '-an',
+        outName,
+      ];
+    } else {
+      args = [
+        '-framerate', String(fps),
+        '-i', 'f%05d.jpg',
+        '-c:v', 'libwebp',
+        '-lossless', '0',
+        '-q:v', String(quality),
+        '-preset', 'default',
+        '-loop', '0',
+        '-an',
+        '-vsync', '0',
+        outName,
+      ];
+    }
+
+    await ffmpeg.exec(args);
+
+    const data = await ffmpeg.readFile(outName);
+    return new Blob([data.buffer], { type: mimeType });
   } finally {
     try { ffmpeg.off('progress', progressHandler); } catch {}
     for (const name of names) {
       try { await ffmpeg.deleteFile(name); } catch {}
     }
-    try { await ffmpeg.deleteFile('output.webp'); } catch {}
+    try { await ffmpeg.deleteFile(outName); } catch {}
   }
 }
+
+// 後方互換のためのエイリアス
+export const framesToWebP = (frames, fps, quality, onProgress, onStatus) =>
+  framesToVideo(frames, fps, quality, 'webp', onProgress, onStatus);
