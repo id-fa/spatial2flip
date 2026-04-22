@@ -1,0 +1,331 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+  background: #0d1117;
+  color: #e6edf3;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+header {
+  text-align: center;
+  padding: 2rem 1rem 0.5rem;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  color: #8b949e;
+  margin: 0.4rem 0 0;
+  font-size: 0.95rem;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+h2 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #c9d1d9;
+  letter-spacing: 0.02em;
+}
+
+#drop-zone {
+  display: block;
+  border: 2px dashed #30363d;
+  border-radius: 10px;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+#drop-zone:hover,
+#drop-zone.dragover {
+  border-color: #58a6ff;
+  background: rgba(56, 139, 253, 0.1);
+}
+
+.drop-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.4rem;
+  color: #58a6ff;
+}
+
+.hint {
+  color: #8b949e;
+  font-size: 0.85rem;
+}
+
+.hint.info {
+  padding: 0.6rem 0.8rem;
+  background: rgba(56, 139, 253, 0.08);
+  border-left: 3px solid #388bfd;
+  border-radius: 4px;
+  grid-column: 1 / -1;
+  color: #c9d1d9;
+}
+
+.format-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.format-grid label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.9rem;
+}
+
+.format-grid label:hover {
+  border-color: #484f58;
+}
+
+.format-grid label:has(input:checked) {
+  border-color: #58a6ff;
+  background: rgba(56, 139, 253, 0.1);
+}
+
+.format-grid input[type="radio"] {
+  accent-color: #58a6ff;
+}
+
+#viewer {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+#viewer canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#viewer-controls {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+#vr-button-container {
+  position: relative;
+}
+
+/* Override Three.js VRButton styles */
+#vr-button-container button {
+  position: relative !important;
+  left: auto !important;
+  bottom: auto !important;
+  right: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  padding: 0.5rem 1rem !important;
+  background: rgba(35, 134, 54, 0.8) !important;
+  border: 1px solid #238636 !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+  font-size: 0.85rem !important;
+  font-family: inherit !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  opacity: 1 !important;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.options label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+.options .unit {
+  display: inline-block;
+  margin-left: 0.3rem;
+  color: #6e7681;
+  font-size: 0.8rem;
+}
+
+input[type="number"],
+select {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #e6edf3;
+  padding: 0.45rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  width: 100%;
+}
+
+input[type="number"]:focus,
+select:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+button.primary {
+  background: #238636;
+  border: 1px solid #2ea043;
+  color: white;
+  padding: 0.6rem 1.6rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+button.primary:disabled {
+  background: #30363d;
+  border-color: #30363d;
+  color: #6e7681;
+  cursor: not-allowed;
+}
+
+#progress {
+  margin-top: 1rem;
+}
+
+#progress-bar {
+  width: 100%;
+  height: 10px;
+  appearance: none;
+}
+
+#progress-bar::-webkit-progress-bar {
+  background: #21262d;
+  border-radius: 5px;
+}
+
+#progress-bar::-webkit-progress-value {
+  background: linear-gradient(90deg, #388bfd, #58a6ff);
+  border-radius: 5px;
+  transition: width 0.2s;
+}
+
+#progress-bar::-moz-progress-bar {
+  background: linear-gradient(90deg, #388bfd, #58a6ff);
+  border-radius: 5px;
+}
+
+#progress-text {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #8b949e;
+}
+
+#result-actions {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.download-btn {
+  display: inline-block;
+  background: #1f6feb;
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+  border: 1px solid #388bfd;
+}
+
+.download-btn:hover {
+  background: #388bfd;
+}
+
+.preview-btn {
+  background: transparent;
+  color: #e6edf3;
+  border: 1px solid #484f58;
+  padding: 0.55rem 1.1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.preview-btn:hover {
+  background: #21262d;
+  border-color: #6e7681;
+}
+
+#preview-container {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  text-align: center;
+}
+
+#preview-img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  background: #000;
+  border-radius: 4px;
+}
+
+footer {
+  text-align: center;
+  color: #6e7681;
+  padding: 2rem 1rem;
+  font-size: 0.8rem;
+}

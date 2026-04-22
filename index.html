@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>360° Video Maker</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>360° Video Maker</h1>
+    <p class="subtitle">360°/VR画像 → ぐるっと一回転 WebP アニメーション</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <label id="drop-zone" for="file-input">
+        <input type="file" id="file-input" accept="image/*,.heic,.heif" hidden>
+        <div class="drop-zone-content">
+          <div class="drop-icon">⇪</div>
+          <div>画像をドロップ または クリックして選択</div>
+          <div class="hint">JPG / PNG / WebP / HEIC（Apple 空間写真）— すべてブラウザ内で処理されます</div>
+        </div>
+      </label>
+    </section>
+
+    <div id="after-upload" hidden>
+      <section class="card">
+        <h2>画像形式</h2>
+        <div class="format-grid">
+          <label><input type="radio" name="format" value="mono360" checked><span>360° モノラル</span></label>
+          <label><input type="radio" name="format" value="sbs360"><span>VR360 SBS（左右）</span></label>
+          <label><input type="radio" name="format" value="ou360"><span>VR360 OU（上下）</span></label>
+          <label><input type="radio" name="format" value="sbs180"><span>VR180 SBS（左右）</span></label>
+          <label><input type="radio" name="format" value="ou180"><span>VR180 OU（上下）</span></label>
+          <label><input type="radio" name="format" value="spatial"><span>空間写真（Apple MV-HEIC）</span></label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>プレビュー（簡易ビューア）</h2>
+        <div id="viewer"></div>
+        <div id="viewer-controls">
+          <div id="vr-button-container"></div>
+          <span class="hint">ドラッグで視点操作。VR ゴーグル接続時は立体視可能</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>動画変換（アニメーション WebP）</h2>
+
+        <div id="convert-360-options" class="options">
+          <label>回転時間
+            <input type="number" id="duration" value="20" min="1" max="30" step="0.5">
+            <span class="unit">秒</span>
+          </label>
+          <label>FPS
+            <input type="number" id="fps" value="30" min="10" max="60">
+          </label>
+          <label>解像度
+            <select id="resolution">
+              <option value="512,512">512 × 512</option>
+              <option value="768,768">768 × 768</option>
+              <option value="1024,1024">1024 × 1024</option>
+              <option value="960,540" selected>960 × 540 (16:9)</option>
+              <option value="1280,720">1280 × 720 (16:9)</option>
+            </select>
+          </label>
+          <label>品質
+            <select id="quality">
+              <option value="60" selected>軽量 (q=60)</option>
+              <option value="75">標準 (q=75)</option>
+              <option value="90">高画質 (q=90)</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="convert-180-options" class="options" hidden>
+          <p class="hint info">VR180 / 空間写真は左右視差を数回パタパタと切り替えるアニメーションとして変換します</p>
+          <label>切替サイクル数
+            <input type="number" id="cycles" value="1" min="1" max="20">
+            <span class="unit">往復</span>
+          </label>
+          <label>切替間隔
+            <input type="number" id="interval" value="0.1" min="0.1" max="2" step="0.1">
+            <span class="unit">秒</span>
+          </label>
+          <label>品質
+            <select id="quality180">
+              <option value="60">軽量 (q=60)</option>
+              <option value="75" selected>標準 (q=75)</option>
+              <option value="90">高画質 (q=90)</option>
+            </select>
+          </label>
+        </div>
+
+        <button id="convert-button" class="primary">変換開始</button>
+
+        <div id="progress" hidden>
+          <progress id="progress-bar" value="0" max="1"></progress>
+          <div id="progress-text"></div>
+        </div>
+
+        <div id="result-actions">
+          <a id="download-link" class="download-btn" hidden download></a>
+          <button id="preview-button" class="preview-btn" type="button" hidden>▶ プレビュー</button>
+        </div>
+        <div id="preview-container" hidden>
+          <img id="preview-img" alt="変換結果のプレビュー">
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <p>すべての処理はブラウザ内で完結し、画像はサーバーに送信されません</p>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
