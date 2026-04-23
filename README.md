@@ -2,9 +2,9 @@
 
 360° / VR / Apple 空間写真 / **魚眼 180°** をブラウザ上で表示し、カメラワーク（回転・停止・ズーム・8 の字）の組合せ、**ライブ録画**、**端末のジャイロ操作** を使った動画や、左右視差を切り替えるパタパタアニメーションを **アニメーション WebP / MP4 (H.264)** としてダウンロードできるシングルページ Web アプリです。
 
-|Screenshot|Camera Control|
-|---|---|
-|![Screenshot](docs/screenshot.png)|![Camera Control](docs/camera_control.png)|
+|Screenshot|Camera Control|Generated|
+|---|---|---|
+|![Screenshot](docs/screenshot.png)|![Camera Control](docs/camera_control.png)|<video src="https://github.com/user-attachments/assets/4dfd8ff9-529e-45b5-87eb-a0891f725519" control></video>|
 
 **PWA 対応**。初回アクセス後は完全オフラインで動作し、ホーム画面に追加すればアプリのように起動できます。
 
