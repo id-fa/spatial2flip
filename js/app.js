@@ -1,6 +1,7 @@
 import { Viewer } from './viewer.js';
 import { captureVR180PataPata, framesToVideo } from './converter.js';
 import { loadSpatialHeic } from './heic.js';
+import { unwarpFisheye180Mono, unwarpFisheye180SBS } from './fisheye.js';
 
 const state = {
   image: null,
@@ -10,14 +11,25 @@ const state = {
   cameraSteps: [],
   cameraStepIdSeq: 0,
   cameraStart: null, // { lon, lat, fov } — 開始位置を設定されるまで null
+  recordTimerRaf: 0,
+  // 魚眼 unwarp キャッシュ（state.image が更新されたら無効化）
+  displayImage: null,       // 実際にビューアに渡す画像（魚眼なら unwarp 済み）
+  unwarpedMono: null,
+  unwarpedSbs: null,
 };
 
 function init() {
   const viewerContainer = document.getElementById('viewer');
   state.viewer = new Viewer(viewerContainer);
 
-  document.getElementById('vr-button-container')
-    .appendChild(state.viewer.createVRButton());
+  // WebXR 非対応（iOS など）では Three.js の VRButton が「WEBXR NOT AVAILABLE」
+  // リンクを返し、絶対配置でビューアに重なる。そういった環境ではコンテナごと隠す。
+  const vrContainer = document.getElementById('vr-button-container');
+  if ('xr' in navigator) {
+    vrContainer.appendChild(state.viewer.createVRButton());
+  } else {
+    vrContainer.hidden = true;
+  }
 
   const fileInput = document.getElementById('file-input');
   fileInput.addEventListener('change', (e) => {
@@ -42,7 +54,7 @@ function init() {
     r.addEventListener('change', () => {
       if (r.checked) {
         state.format = r.value;
-        if (state.image) state.viewer.setImage(state.image, state.format);
+        if (state.image) applyViewerImage();
         updateConvertUI();
       }
     });
@@ -51,6 +63,8 @@ function init() {
   document.getElementById('convert-button').addEventListener('click', handleConvert);
 
   initCameraWorkUI();
+  initRecorderUI();
+  initGyroUI();
 
   const previewBtn = document.getElementById('preview-button');
   const previewContainer = document.getElementById('preview-container');
@@ -98,6 +112,10 @@ async function loadImage(file) {
     return;
   }
 
+  if (state.viewer && state.viewer.isRecording()) {
+    cancelRecording();
+  }
+
   const progressEl = document.getElementById('progress');
   const progressText = document.getElementById('progress-text');
   const progressBar = document.getElementById('progress-bar');
@@ -127,7 +145,11 @@ async function loadImage(file) {
     }
 
     state.image = imageSource;
-    state.viewer.setImage(imageSource, state.format);
+    // 新しい画像 → 魚眼 unwarp キャッシュを破棄
+    state.unwarpedMono = null;
+    state.unwarpedSbs = null;
+    state.displayImage = null;
+    applyViewerImage();
     document.getElementById('after-upload').hidden = false;
 
     resetDownload();
@@ -145,6 +167,28 @@ function selectFormat(format) {
   const radio = document.querySelector(`input[name="format"][value="${format}"]`);
   if (radio) radio.checked = true;
   updateConvertUI();
+}
+
+// 現在の state.format に応じて魚眼なら unwarp を行い、viewer に適切な
+// displayFormat (mono180 / sbs180) と展開済み画像を渡す。非魚眼はそのまま。
+function applyViewerImage() {
+  if (!state.image) return;
+  if (state.format === 'fisheyeMono180') {
+    if (!state.unwarpedMono) state.unwarpedMono = unwarpFisheye180Mono(state.image);
+    state.displayImage = state.unwarpedMono;
+    state.viewer.setImage(state.displayImage, 'mono180');
+  } else if (state.format === 'fisheyeSbs180') {
+    if (!state.unwarpedSbs) state.unwarpedSbs = unwarpFisheye180SBS(state.image);
+    state.displayImage = state.unwarpedSbs;
+    state.viewer.setImage(state.displayImage, 'sbs180');
+  } else {
+    state.displayImage = state.image;
+    state.viewer.setImage(state.image, state.format);
+  }
+}
+
+function isFisheyeFormat(f) {
+  return f === 'fisheyeMono180' || f === 'fisheyeSbs180';
 }
 
 function resetDownload() {
@@ -170,31 +214,38 @@ function resetDownload() {
 function updateConvertUI() {
   const isSpatial = state.format === 'spatial';
   const is180 = state.format.endsWith('180');
+  const isFisheyeMono = state.format === 'fisheyeMono180';
+  // パタパタ対象かどうか = ステレオペアを持つ 180°（VR180 SBS/OU、魚眼 SBS、spatial）
+  const supportsPataPata = !isFisheyeMono && (isSpatial || is180);
   const hasSteps = state.cameraSteps.length > 0;
   const useCameraWork = !isSpatial && hasSteps;
 
-  // convert-360-options は spatial 以外（= mono360/sbs360/ou360/sbs180/ou180）で表示
+  // convert-360-options は spatial 以外（= mono360/sbs360/ou360/sbs180/ou180/fisheye*）で表示
   document.getElementById('convert-360-options').hidden = isSpatial;
-  // パタパタ設定は spatial 常時 or VR180 でカメラワーク未設定時のみ
+  // パタパタ設定は spatial 常時、または VR180/魚眼 SBS でカメラワーク未設定時のみ
   document.getElementById('convert-180-options').hidden =
-    !isSpatial && !(is180 && !useCameraWork);
+    !isSpatial && !(supportsPataPata && !useCameraWork);
 
-  // 「回転時間」は 360° 系のみ意味がある（VR180 フォールバックはパタパタなので非表示）
+  // 「回転時間」は 360° 系と魚眼モノ 180° で使う（パタパタ対象フォーマットでは非表示）
   const durationLabel = document.getElementById('duration').closest('label');
-  if (durationLabel) durationLabel.hidden = is180;
+  if (durationLabel) durationLabel.hidden = supportsPataPata;
 
   // カメラワーク summary のフォールバックヒント
   const fallbackHint = document.getElementById('camera-work-fallback-hint');
   if (fallbackHint) {
-    fallbackHint.textContent = is180
-      ? '（未設定時はパタパタアニメ）'
-      : '（未設定時は「回転時間」で左 360° 回転）';
+    if (isFisheyeMono) {
+      fallbackHint.textContent = '（未設定時は「回転時間」で左 170° スイープ）';
+    } else {
+      fallbackHint.textContent = supportsPataPata
+        ? '（未設定時はパタパタアニメ）'
+        : '（未設定時は「回転時間」で左 360° 回転）';
+    }
   }
 
   // カメラワーク内のオーバーライドヒント
   const overrideHint = document.getElementById('camera-work-hint-override');
   if (overrideHint) {
-    overrideHint.textContent = is180
+    overrideHint.textContent = supportsPataPata
       ? 'ステップを 1 つ以上追加すると、パタパタではなくこの設定に従って動画を生成します'
       : 'ステップを 1 つ以上追加すると、上の「回転時間」は使われずこの設定に従って動画を生成します';
   }
@@ -203,6 +254,7 @@ function updateConvertUI() {
     state.viewer?.stopCameraPlayback();
   }
   updateDurationEnabledState();
+  updateRecorderUI();
 }
 
 function initCameraWorkUI() {
@@ -283,14 +335,68 @@ function initCameraWorkUI() {
     renderCameraSteps();
   });
 
+  const exportBtn = document.getElementById('camera-export-json');
+  const importBtn = document.getElementById('camera-import-json');
+  const importFile = document.getElementById('camera-import-file');
+
+  exportBtn.addEventListener('click', () => {
+    if (state.cameraSteps.length === 0 && !state.cameraStart) {
+      alert('エクスポートする内容がありません（開始位置を設定するかステップを追加してください）');
+      return;
+    }
+    const data = {
+      schema: 'spatial2flip-camerawork/1',
+      exportedAt: new Date().toISOString(),
+      start: state.cameraStart,
+      steps: state.cameraSteps.map(({ id, ...rest }) => rest),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `camerawork_${timestamp()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener('click', () => importFile.click());
+
+  importFile.addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const { start, steps } = validateCameraWorkJSON(data);
+      if (state.cameraSteps.length > 0 || state.cameraStart) {
+        if (!confirm('現在のカメラワーク定義を上書きしてインポートしますか？')) return;
+      }
+      state.viewer.stopCameraPlayback();
+      state.cameraStart = start;
+      state.cameraSteps = steps.map((s) => ({ id: ++state.cameraStepIdSeq, ...s }));
+      updateCameraStartUI();
+      renderCameraSteps();
+    } catch (err) {
+      alert('JSON の読み込みに失敗: ' + err.message);
+    } finally {
+      importFile.value = '';
+    }
+  });
+
   playBtn.addEventListener('click', async () => {
     if (!state.cameraStart) return;
     if (state.cameraSteps.length === 0) {
       alert('ステップを追加してください');
       return;
     }
+    if (state.viewer.isRecording()) return;
     playBtn.hidden = true;
     stopBtn.hidden = false;
+    // 再生中は録画ボタンを無効化（相互排他）
+    const recStart = document.getElementById('record-start');
+    if (recStart) recStart.disabled = true;
 
     // ブラウザ表示位置の都合でビューアが隠れていたら、再生前に可視領域へスクロール
     await ensureViewerVisible();
@@ -303,6 +409,7 @@ function initCameraWorkUI() {
       onEnd: () => {
         playBtn.hidden = false;
         stopBtn.hidden = true;
+        if (recStart) recStart.disabled = false;
       },
     });
   });
@@ -311,6 +418,8 @@ function initCameraWorkUI() {
     state.viewer.stopCameraPlayback();
     playBtn.hidden = false;
     stopBtn.hidden = true;
+    const recStart = document.getElementById('record-start');
+    if (recStart) recStart.disabled = false;
   });
 
   // ドラッグ中の挿入位置インジケータ
@@ -434,6 +543,73 @@ function addCameraStep(partial) {
   const step = { id: ++state.cameraStepIdSeq, ...partial };
   state.cameraSteps.push(step);
   renderCameraSteps();
+}
+
+// カメラワーク定義 JSON のスキーマ検証。不正なら throw。
+// 受け付けるスキーマ: "spatial2flip-camerawork/1"（schema フィールドは省略可。互換のため）。
+function validateCameraWorkJSON(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('JSON の形式が不正です');
+  }
+  if (data.schema && typeof data.schema === 'string'
+      && !data.schema.startsWith('spatial2flip-camerawork/')) {
+    throw new Error(`想定外のスキーマ: ${data.schema}`);
+  }
+
+  let start = null;
+  if (data.start && typeof data.start === 'object') {
+    const lon = Number(data.start.lon);
+    const lat = Number(data.start.lat);
+    const fov = Number(data.start.fov);
+    if ([lon, lat, fov].every(Number.isFinite)) {
+      start = { lon, lat, fov };
+    } else {
+      throw new Error('start の lon/lat/fov が数値ではありません');
+    }
+  }
+
+  if (!Array.isArray(data.steps)) {
+    throw new Error('steps が配列ではありません');
+  }
+  const steps = data.steps.map((s, i) => validateCameraWorkStep(s, i));
+  return { start, steps };
+}
+
+function validateCameraWorkStep(s, idx) {
+  const n = idx + 1;
+  if (!s || typeof s !== 'object') throw new Error(`ステップ ${n} が不正`);
+  const duration = Number(s.duration);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`ステップ ${n}: duration が不正 (正の数である必要があります)`);
+  }
+  const type = s.type;
+  if (type === 'rotate') {
+    if (s.axis !== 'lon' && s.axis !== 'lat') throw new Error(`ステップ ${n}: axis は 'lon' か 'lat' である必要があります`);
+    const delta = Number(s.delta);
+    if (!Number.isFinite(delta)) throw new Error(`ステップ ${n}: delta が数値ではありません`);
+    return { type, axis: s.axis, delta, duration };
+  }
+  if (type === 'pause') return { type, duration };
+  if (type === 'zoom') {
+    const factor = Number(s.factor);
+    if (!Number.isFinite(factor) || factor <= 0) {
+      throw new Error(`ステップ ${n}: factor は正の数である必要があります`);
+    }
+    const direction = (s.direction === 'in' || s.direction === 'out')
+      ? s.direction
+      : (factor < 1 ? 'in' : 'out');
+    return { type, direction, factor, duration };
+  }
+  if (type === 'figure8') {
+    const ampLon = Number(s.ampLon);
+    const ampLat = Number(s.ampLat);
+    if (!Number.isFinite(ampLon) || !Number.isFinite(ampLat)) {
+      throw new Error(`ステップ ${n}: ampLon / ampLat が数値ではありません`);
+    }
+    const size = (s.size === 'small' || s.size === 'large') ? s.size : 'small';
+    return { type, size, ampLon, ampLat, duration };
+  }
+  throw new Error(`ステップ ${n}: 不明な type: ${type}`);
 }
 
 function renderCameraSteps() {
@@ -617,13 +793,19 @@ function isUsingCameraSteps() {
 
 async function handleConvert() {
   if (!state.image) return;
+  if (state.viewer.isRecording()) {
+    alert('録画中は変換できません。録画を停止してください');
+    return;
+  }
 
   const button = document.getElementById('convert-button');
   const progressEl = document.getElementById('progress');
   const progressBar = document.getElementById('progress-bar');
   const progressText = document.getElementById('progress-text');
+  const recStart = document.getElementById('record-start');
 
   button.disabled = true;
+  if (recStart) recStart.disabled = true;
   progressEl.hidden = false;
   progressBar.value = 0;
   resetDownload();
@@ -634,8 +816,11 @@ async function handleConvert() {
     let quality;
     const isSpatial = state.format === 'spatial';
     const is180 = state.format.endsWith('180');
+    const isFisheyeMono = state.format === 'fisheyeMono180';
+    const isFisheyeSbs = state.format === 'fisheyeSbs180';
     const useCameraWork = isUsingCameraSteps();
-    const isPataPata = (is180 && !useCameraWork) || isSpatial;
+    // 魚眼モノラルはステレオペアを持たないのでパタパタ不可 → 非パタパタで回転フォールバック
+    const isPataPata = (is180 && !useCameraWork && !isFisheyeMono) || isSpatial;
 
     if (isPataPata) {
       const cycles = parseInt(document.getElementById('cycles').value, 10) || 5;
@@ -644,9 +829,10 @@ async function handleConvert() {
       fps = 30;
 
       progressText.textContent = 'パタパタフレーム生成中...';
-      // 空間写真は SBS 合成済みなので sbs180 と同じレイアウトで処理
-      const layout = isSpatial ? 'sbs180' : state.format;
-      const result = await captureVR180PataPata(state.image, layout, {
+      // 空間写真と魚眼 SBS は SBS 合成済みとして sbs180 レイアウトで処理
+      const layout = (isSpatial || isFisheyeSbs) ? 'sbs180' : state.format;
+      const pataImage = isFisheyeSbs ? state.displayImage : state.image;
+      const result = await captureVR180PataPata(pataImage, layout, {
         cycles, interval, fps,
       });
       frames = result.frames;
@@ -656,13 +842,14 @@ async function handleConvert() {
       const [w, h] = document.getElementById('resolution').value.split(',').map(Number);
       quality = parseInt(document.getElementById('quality').value, 10) || 75;
 
-      // ステップ未設定時は従来どおり「n秒で左 360° 回転」
+      // ステップ未設定時のデフォルト: 360° 系は一回転、魚眼 mono 180° は水平スイープ
+      const defaultDelta = isFisheyeMono ? -170 : -360;
       const steps = state.cameraSteps.length > 0
         ? state.cameraSteps
         : [{
             type: 'rotate',
             axis: 'lon',
-            delta: -360,
+            delta: defaultDelta,
             duration: parseFloat(document.getElementById('duration').value) || 5,
           }];
 
@@ -718,7 +905,9 @@ async function handleConvert() {
     const url = URL.createObjectURL(outBlob);
     link.href = url;
     let prefix;
-    if (useCameraWork && is180) prefix = 'vr180_camera';
+    if (isFisheyeMono) prefix = useCameraWork ? 'fisheye180_mono_camera' : 'fisheye180_mono';
+    else if (isFisheyeSbs) prefix = useCameraWork ? 'fisheye180_sbs_camera' : 'fisheye180_sbs_patapata';
+    else if (useCameraWork && is180) prefix = 'vr180_camera';
     else if (isSpatial) prefix = 'spatial_patapata';
     else if (is180) prefix = 'vr180_patapata';
     else prefix = 'rotation360';
@@ -732,6 +921,235 @@ async function handleConvert() {
     progressText.textContent = 'エラー: ' + err.message;
   } finally {
     button.disabled = false;
+    if (recStart) recStart.disabled = state.format === 'spatial';
+  }
+}
+
+// ===== ジャイロ UI =====
+
+function initGyroUI() {
+  const btn = document.getElementById('gyro-toggle');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (state.viewer.isGyroActive()) {
+      state.viewer.stopGyroscope();
+      updateGyroButtonState(false);
+      return;
+    }
+    try {
+      await state.viewer.startGyroscope();
+      updateGyroButtonState(true);
+    } catch (err) {
+      alert(err.message);
+      updateGyroButtonState(false);
+    }
+  });
+  updateGyroButtonVisibility();
+}
+
+function updateGyroButtonVisibility() {
+  const btn = document.getElementById('gyro-toggle');
+  if (!btn) return;
+  const supported = state.viewer && state.viewer.isGyroSupported();
+  const isSpatial = state.format === 'spatial';
+  // DeviceOrientationEvent 非対応環境（多くのデスクトップ）や spatial では隠す
+  btn.hidden = !supported || isSpatial;
+  // ジャイロが ON の状態でフォーマット切替されたら停止
+  if (isSpatial && state.viewer && state.viewer.isGyroActive()) {
+    state.viewer.stopGyroscope();
+    updateGyroButtonState(false);
+  }
+}
+
+function updateGyroButtonState(active) {
+  const btn = document.getElementById('gyro-toggle');
+  if (!btn) return;
+  btn.classList.toggle('is-active', active);
+  btn.textContent = active ? '📱 ジャイロ OFF' : '📱 ジャイロ ON';
+}
+
+// ===== 録画 UI =====
+
+function initRecorderUI() {
+  const startBtn = document.getElementById('record-start');
+  const stopBtn = document.getElementById('record-stop');
+  const elapsedEl = document.getElementById('record-elapsed');
+
+  startBtn.addEventListener('click', () => {
+    if (!state.image) {
+      alert('画像を読み込んでから録画を開始してください');
+      return;
+    }
+    if (state.viewer.isPlayingSequence && state.viewer.isPlayingSequence()) {
+      alert('カメラワーク再生中は録画できません。停止してから再試行してください');
+      return;
+    }
+    try {
+      state.viewer.startRecording();
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    setRecordingUILocked(true);
+    startBtn.hidden = true;
+    stopBtn.hidden = false;
+    document.getElementById('record-indicator').hidden = false;
+    elapsedEl.textContent = '0.0s';
+
+    const tick = () => {
+      if (!state.viewer.isRecording()) return;
+      const sec = state.viewer.getRecordingElapsed();
+      elapsedEl.textContent = sec.toFixed(1) + 's';
+      state.recordTimerRaf = requestAnimationFrame(tick);
+    };
+    state.recordTimerRaf = requestAnimationFrame(tick);
+  });
+
+  stopBtn.addEventListener('click', async () => {
+    if (state.recordTimerRaf) {
+      cancelAnimationFrame(state.recordTimerRaf);
+      state.recordTimerRaf = 0;
+    }
+    const result = state.viewer.stopRecording();
+    startBtn.hidden = false;
+    stopBtn.hidden = true;
+    document.getElementById('record-indicator').hidden = true;
+
+    if (!result || result.duration < 0.5 || !result.samples || result.samples.length < 2) {
+      alert('録画が短すぎます（0.5 秒以上録画してください）');
+      setRecordingUILocked(false);
+      return;
+    }
+
+    await runRecordConvert(result.samples);
+    setRecordingUILocked(false);
+  });
+}
+
+function cancelRecording() {
+  if (state.recordTimerRaf) {
+    cancelAnimationFrame(state.recordTimerRaf);
+    state.recordTimerRaf = 0;
+  }
+  if (state.viewer && state.viewer.isRecording()) {
+    state.viewer.stopRecording();
+  }
+  document.getElementById('record-start').hidden = false;
+  document.getElementById('record-stop').hidden = true;
+  document.getElementById('record-indicator').hidden = true;
+  setRecordingUILocked(false);
+}
+
+function updateRecorderUI() {
+  const startBtn = document.getElementById('record-start');
+  const stopBtn = document.getElementById('record-stop');
+  const hint = document.getElementById('record-hint');
+  if (!startBtn) return;
+  const isSpatial = state.format === 'spatial';
+
+  if (isSpatial) {
+    // 録画中に spatial に切替された場合も想定して cancel
+    if (state.viewer && state.viewer.isRecording()) cancelRecording();
+    startBtn.hidden = true;
+    stopBtn.hidden = true;
+    if (hint) hint.textContent = '空間写真（平面ステレオ）は録画非対応です';
+  } else {
+    if (!state.viewer || !state.viewer.isRecording()) {
+      startBtn.hidden = false;
+      stopBtn.hidden = true;
+    }
+    if (hint) hint.textContent = 'ドラッグ／ピンチで視点・画角操作。録画開始でビューアの操作をそのまま動画化できます';
+  }
+  updateGyroButtonVisibility();
+}
+
+function setRecordingUILocked(locked) {
+  // 録画中は他の操作（変換／カメラワーク編集／フォーマット切替／ジャイロ切替）をロック
+  document.getElementById('convert-button').disabled = locked;
+  document.querySelectorAll('input[name="format"]').forEach((r) => { r.disabled = locked; });
+  const editBtns = document.querySelectorAll(
+    '.camera-add-btn, .camera-add-pause-btn, .camera-add-zoom-btn, .camera-add-fig8-btn'
+  );
+  editBtns.forEach((b) => { b.disabled = locked; });
+  document.getElementById('camera-preview-play').disabled = locked;
+  document.getElementById('camera-preview-stop').disabled = locked;
+  document.getElementById('camera-set-start').disabled = locked;
+  document.getElementById('camera-steps-clear').disabled = locked;
+  const gyroBtn = document.getElementById('gyro-toggle');
+  if (gyroBtn) gyroBtn.disabled = locked;
+  if (!locked) {
+    // ロック解除時は開始位置の有無に応じた本来の状態を再適用
+    updateCameraButtonsEnabled();
+    document.getElementById('camera-set-start').disabled = false;
+  }
+}
+
+async function runRecordConvert(samples) {
+  const progressEl = document.getElementById('progress');
+  const progressBar = document.getElementById('progress-bar');
+  const progressText = document.getElementById('progress-text');
+  const convertBtn = document.getElementById('convert-button');
+
+  convertBtn.disabled = true;
+  progressEl.hidden = false;
+  progressBar.value = 0;
+  resetDownload();
+
+  try {
+    const fps = parseInt(document.getElementById('fps').value, 10) || 30;
+    const [w, h] = document.getElementById('resolution').value.split(',').map(Number);
+    const quality = parseInt(document.getElementById('quality').value, 10) || 75;
+
+    progressText.textContent = '録画フレーム生成中...';
+
+    const { frames } = await state.viewer.captureRecordedSequence({
+      samples,
+      width: w,
+      height: h,
+      fps,
+      onProgress: (p) => {
+        progressBar.value = p * 0.4;
+        progressText.textContent = `録画フレーム生成中... ${Math.round(p * 100)}%`;
+      },
+    });
+
+    const outputFormat = document.getElementById('output-format').value || 'webp';
+    const formatLabel = outputFormat === 'mp4' ? 'MP4' : 'WebP';
+
+    const outBlob = await framesToVideo(
+      frames, fps, quality, outputFormat,
+      (p) => {
+        progressBar.value = 0.4 + p * 0.6;
+        progressText.textContent = `${formatLabel} エンコード中... ${Math.round(p * 100)}%`;
+      },
+      (msg) => { progressText.textContent = msg; }
+    );
+
+    progressBar.value = 1;
+    progressText.textContent = `完了: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム`;
+
+    const link = document.getElementById('download-link');
+    const url = URL.createObjectURL(outBlob);
+    link.href = url;
+    const is180 = state.format.endsWith('180');
+    let prefix;
+    if (state.format === 'fisheyeMono180') prefix = 'recording_fisheye180_mono';
+    else if (state.format === 'fisheyeSbs180') prefix = 'recording_fisheye180_sbs';
+    else if (is180) prefix = 'recording_vr180';
+    else prefix = 'recording_360';
+    link.download = `${prefix}_${timestamp()}.${outputFormat}`;
+    link.textContent = `ダウンロード (${(outBlob.size / 1024).toFixed(0)} KB)`;
+    link.hidden = false;
+    link.dataset.kind = outputFormat === 'mp4' ? 'video' : 'image';
+    document.getElementById('preview-button').hidden = false;
+
+    // 結果が見えるようにスクロール
+    document.getElementById('result-actions').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (err) {
+    console.error(err);
+    progressText.textContent = 'エラー: ' + err.message;
+  } finally {
+    convertBtn.disabled = false;
   }
 }
 
@@ -750,3 +1168,12 @@ function timestamp() {
 }
 
 init();
+
+// PWA: Service Worker 登録（オフライン動作 / インストール対応）
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((err) => {
+      console.warn('Service Worker 登録に失敗:', err);
+    });
+  });
+}

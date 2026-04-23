@@ -147,8 +147,9 @@ h2 {
   position: relative;
 }
 
-/* Override Three.js VRButton styles */
-#vr-button-container button {
+/* Override Three.js VRButton styles (button on supported envs, a on iOS etc) */
+#vr-button-container button,
+#vr-button-container a {
   position: relative !important;
   left: auto !important;
   bottom: auto !important;
@@ -165,6 +166,44 @@ h2 {
   letter-spacing: 0 !important;
   text-transform: none !important;
   opacity: 1 !important;
+  display: inline-block !important;
+  width: auto !important;
+  text-align: center !important;
+  text-decoration: none !important;
+  z-index: auto !important;
+  cursor: pointer !important;
+}
+
+#vr-button-container[hidden] {
+  display: none !important;
+}
+
+.gyro-btn {
+  background: transparent;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 0.45rem 0.9rem;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.gyro-btn:hover:not(:disabled) {
+  border-color: #58a6ff;
+  color: #e6edf3;
+}
+
+.gyro-btn.is-active {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.gyro-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .options {
@@ -701,6 +740,90 @@ button.primary:disabled {
 
 .camera-work .options label.is-disabled input {
   pointer-events: none;
+}
+
+.record-start-btn,
+.record-stop-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 5px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.record-start-btn {
+  background: transparent;
+  color: #f85149;
+  border: 1px solid #f85149;
+}
+
+.record-start-btn:hover:not(:disabled) {
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.record-start-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.record-stop-btn {
+  background: #da3633;
+  color: #fff;
+  border: 1px solid #f85149;
+}
+
+.record-stop-btn:hover {
+  background: #f85149;
+}
+
+.record-indicator {
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(248, 81, 73, 0.6);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  backdrop-filter: blur(4px);
+}
+
+.record-indicator[hidden] {
+  display: none;
+}
+
+.record-dot {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #f85149;
+  box-shadow: 0 0 6px rgba(248, 81, 73, 0.8);
+  animation: record-blink 1s steps(2, start) infinite;
+}
+
+.record-text {
+  letter-spacing: 0.05em;
+}
+
+.record-time {
+  font-variant-numeric: tabular-nums;
+  color: #ffa198;
+}
+
+@keyframes record-blink {
+  0%   { opacity: 1; }
+  100% { opacity: 0.25; }
 }
 
 footer {

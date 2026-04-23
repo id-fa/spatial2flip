@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>spatial2flip</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/favicon.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="spatial2flip">
   <script type="importmap">
   {
     "imports": {
@@ -13,6 +21,15 @@
     }
   }
   </script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-E05P3RLDS9"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-E05P3RLDS9');
+</script>
 </head>
 <body>
   <header>
@@ -41,16 +58,27 @@
           <label><input type="radio" name="format" value="ou360"><span>VR360 OU（上下）</span></label>
           <label><input type="radio" name="format" value="sbs180"><span>VR180 SBS（左右）</span></label>
           <label><input type="radio" name="format" value="ou180"><span>VR180 OU（上下）</span></label>
+          <label><input type="radio" name="format" value="fisheyeMono180"><span>魚眼 180° モノラル</span></label>
+          <label><input type="radio" name="format" value="fisheyeSbs180"><span>魚眼 180° SBS</span></label>
           <label><input type="radio" name="format" value="spatial"><span>空間写真（Apple MV-HEIC）</span></label>
         </div>
       </section>
 
       <section class="card">
         <h2>プレビュー（簡易ビューア）</h2>
-        <div id="viewer"></div>
+        <div id="viewer">
+          <div id="record-indicator" class="record-indicator" hidden>
+            <span class="record-dot"></span>
+            <span class="record-text">REC</span>
+            <span class="record-time" id="record-elapsed">0.0s</span>
+          </div>
+        </div>
         <div id="viewer-controls">
           <div id="vr-button-container"></div>
-          <span class="hint">ドラッグで視点操作。VR ゴーグル接続時は立体視可能</span>
+          <button type="button" id="gyro-toggle" class="gyro-btn" hidden>📱 ジャイロ ON</button>
+          <button type="button" id="record-start" class="record-start-btn">● 録画開始</button>
+          <button type="button" id="record-stop" class="record-stop-btn" hidden>■ 録画停止</button>
+          <span class="hint" id="record-hint">ドラッグで視点操作。録画開始するとビューアの操作をそのまま動画化できます</span>
         </div>
       </section>
 
@@ -142,6 +170,9 @@
               <button type="button" id="camera-preview-play">▶ ビューアで再生</button>
               <button type="button" id="camera-preview-stop" hidden>■ 停止</button>
               <button type="button" id="camera-steps-clear">全削除</button>
+              <button type="button" id="camera-export-json">⤓ エクスポート</button>
+              <button type="button" id="camera-import-json">⤒ インポート</button>
+              <input type="file" id="camera-import-file" accept="application/json,.json" hidden>
             </div>
           </details>
         </div>

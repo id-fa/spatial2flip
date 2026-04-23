@@ -1,6 +1,27 @@
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
+// ===== ジャイロ計算用の使い回しオブジェクト =====
+// Three.js 旧 DeviceOrientationControls のロジックを踏襲
+const _GYRO_Q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+const _GYRO_ZEE = new THREE.Vector3(0, 0, 1);
+const _gyroEuler = new THREE.Euler();
+const _gyroQuat = new THREE.Quaternion();
+const _gyroTmp = new THREE.Quaternion();
+const _gyroOutEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+function _getScreenOrientAngle() {
+  if (typeof screen !== 'undefined') {
+    if (screen.orientation && typeof screen.orientation.angle === 'number') {
+      return screen.orientation.angle;
+    }
+  }
+  if (typeof window !== 'undefined' && typeof window.orientation === 'number') {
+    return window.orientation;
+  }
+  return 0;
+}
+
 /**
  * 360°/VR/平面ステレオ画像のビューア。
  * レイヤ構成:
@@ -57,45 +78,263 @@ export class Viewer {
 
     this.renderer.setAnimationLoop(() => {
       this._updateCameraRotation();
+      if (this._recording && this._recording.active) this._pushRecordingSample();
       this.renderer.render(this.scene, this.camera);
     });
+  }
+
+  // ===== ライブ録画 =====
+  // ビューア上のドラッグ／ホイール操作を記録し、停止後にオフスクリーンで
+  // 同じ lon/lat/fov 軌跡をフレーム列として再レンダーする。
+  startRecording() {
+    if (this.renderer.xr.isPresenting) {
+      throw new Error('VR 表示中は録画できません');
+    }
+    if (this.format === 'spatial') {
+      throw new Error('空間写真（平面ステレオ）は録画対象外です');
+    }
+    this.stopCameraPlayback();
+    // 録画中は画面回転を無視するため、開始時の画面角度を固定して使う
+    this._recordedOrientAngle = _getScreenOrientAngle();
+    this._recording = {
+      active: true,
+      startTime: performance.now(),
+      samples: [],
+    };
+    this._pushRecordingSample();
+  }
+
+  _pushRecordingSample() {
+    if (!this._recording || !this._recording.active) return;
+    const t = (performance.now() - this._recording.startTime) / 1000;
+    this._recording.samples.push({
+      t,
+      lon: this._lon,
+      lat: this._lat,
+      fov: this.camera.fov,
+    });
+  }
+
+  stopRecording() {
+    if (!this._recording) return null;
+    const rec = this._recording;
+    rec.active = false;
+    const tEnd = (performance.now() - rec.startTime) / 1000;
+    // 最終フレームを保険で push（直近フレーム以降に微小な移動があれば拾う）
+    const last = rec.samples[rec.samples.length - 1];
+    if (!last || tEnd - last.t > 0.005) {
+      rec.samples.push({
+        t: tEnd,
+        lon: this._lon,
+        lat: this._lat,
+        fov: this.camera.fov,
+      });
+    }
+    this._recording = null;
+    return { samples: rec.samples, duration: tEnd };
+  }
+
+  isRecording() {
+    return !!(this._recording && this._recording.active);
+  }
+
+  getRecordingElapsed() {
+    if (!this._recording || !this._recording.active) return 0;
+    return (performance.now() - this._recording.startTime) / 1000;
+  }
+
+  // ===== ジャイロ制御（端末の向きで視点を回す）=====
+  // DeviceOrientationControls 相当の実装（Three.js addons の旧コード相当）。
+  // alpha/beta/gamma → YXZ Euler → lon/lat に反映。screen.orientation.angle を
+  // 考慮して portrait/landscape 両対応。録画中は開始時の angle を固定して使用。
+  isGyroSupported() {
+    if (typeof window === 'undefined') return false;
+    if (!('DeviceOrientationEvent' in window)) return false;
+    // デスクトップでも API は存在するが実イベントは飛ばないので、タッチ対応端末に限定。
+    const touch = (navigator.maxTouchPoints || 0) > 0;
+    const coarse = typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: coarse)').matches;
+    return touch || coarse;
+  }
+
+  isGyroActive() {
+    return !!this._gyroActive;
+  }
+
+  async startGyroscope() {
+    if (!this.isGyroSupported()) {
+      throw new Error('この端末はジャイロ非対応です');
+    }
+    if (this.format === 'spatial') {
+      throw new Error('空間写真では利用できません');
+    }
+    // iOS 13+ は明示的な許可が必要（クリックハンドラ内で呼ばれる前提）
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const resp = await DeviceOrientationEvent.requestPermission();
+      if (resp !== 'granted') {
+        throw new Error('ジャイロへのアクセスが許可されませんでした');
+      }
+    }
+    this.stopCameraPlayback();
+    this._gyroActive = true;
+    this._gyroYawCaptured = false;
+    this._gyroOrientAngle = _getScreenOrientAngle();
+
+    this._gyroListener = (e) => this._handleDeviceOrientation(e);
+    window.addEventListener('deviceorientation', this._gyroListener);
+
+    this._gyroOrientListener = () => {
+      // 録画中は画面回転を無視（開始時点の angle を使い続ける）
+      if (this._recording && this._recording.active) return;
+      this._gyroOrientAngle = _getScreenOrientAngle();
+      // 画面回転で基準ヨーがずれるので再キャリブレーション
+      this._gyroYawCaptured = false;
+    };
+    window.addEventListener('orientationchange', this._gyroOrientListener);
+    if (screen.orientation && screen.orientation.addEventListener) {
+      screen.orientation.addEventListener('change', this._gyroOrientListener);
+    }
+  }
+
+  stopGyroscope() {
+    if (!this._gyroActive) return;
+    this._gyroActive = false;
+    if (this._gyroListener) {
+      window.removeEventListener('deviceorientation', this._gyroListener);
+      this._gyroListener = null;
+    }
+    if (this._gyroOrientListener) {
+      window.removeEventListener('orientationchange', this._gyroOrientListener);
+      if (screen.orientation && screen.orientation.removeEventListener) {
+        screen.orientation.removeEventListener('change', this._gyroOrientListener);
+      }
+      this._gyroOrientListener = null;
+    }
+  }
+
+  _handleDeviceOrientation(e) {
+    if (!this._gyroActive) return;
+    if (this.renderer.xr.isPresenting) return;
+    if (e.alpha == null && e.beta == null && e.gamma == null) return;
+
+    const alpha = THREE.MathUtils.degToRad(e.alpha || 0);
+    const beta = THREE.MathUtils.degToRad(e.beta || 0);
+    const gamma = THREE.MathUtils.degToRad(e.gamma || 0);
+    const orientDeg = (this._recording && this._recording.active)
+      ? (this._recordedOrientAngle || 0)
+      : (this._gyroOrientAngle || 0);
+    const orient = THREE.MathUtils.degToRad(orientDeg);
+
+    _gyroEuler.set(beta, alpha, -gamma, 'YXZ');
+    _gyroQuat.setFromEuler(_gyroEuler);
+    _gyroQuat.multiply(_GYRO_Q1);                                   // camera 向きの補正
+    _gyroQuat.multiply(_gyroTmp.setFromAxisAngle(_GYRO_ZEE, -orient)); // 画面回転補正
+
+    _gyroOutEuler.setFromQuaternion(_gyroQuat, 'YXZ');
+    let lon = -THREE.MathUtils.radToDeg(_gyroOutEuler.y);
+    let lat = THREE.MathUtils.radToDeg(_gyroOutEuler.x);
+
+    // 初回または画面回転後: 現在の向きを基準（scene の 0°）に揃える
+    if (!this._gyroYawCaptured) {
+      this._gyroYawOffset = lon - this._lon;
+      this._gyroYawCaptured = true;
+    }
+    lon = lon - this._gyroYawOffset;
+    while (lon > 180) lon -= 360;
+    while (lon <= -180) lon += 360;
+
+    if (this.format && this.format.endsWith('180')) {
+      lon = Math.max(-85, Math.min(85, lon));
+    }
+    lat = Math.max(-85, Math.min(85, lat));
+
+    this._lon = lon;
+    this._lat = lat;
   }
 
   _setupControls() {
     const canvas = this.renderer.domElement;
     this._lon = 0;
     this._lat = 0;
-    this._pointerDown = false;
-    this._pointerStart = { x: 0, y: 0 };
-    this._startLonLat = { lon: 0, lat: 0 };
+
+    // モード管理: 'none' | 'drag' | 'pinch' | 'stale'
+    //   stale = ピンチから 1 指へ戻ったあと、全指が離れるまでドラッグを抑止
+    const pointers = new Map();
+    let mode = 'none';
+    let dragStart = null;      // { id, sx, sy, lon, lat }
+    let pinchLast = null;      // 前フレームの 2 指距離
+    this._pointers = pointers;
 
     canvas.addEventListener('pointerdown', (e) => {
       if (this.renderer.xr.isPresenting) return;
       if (this.format === 'spatial') return; // 平面ステレオは視点回転なし
-      this.stopCameraPlayback();
-      this._pointerDown = true;
-      this._pointerStart = { x: e.clientX, y: e.clientY };
-      this._startLonLat = { lon: this._lon, lat: this._lat };
-      canvas.setPointerCapture(e.pointerId);
-      canvas.style.cursor = 'grabbing';
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
+
+      if (pointers.size === 1) {
+        if (this._gyroActive) {
+          // ジャイロ中は単指ドラッグを無効化
+          mode = 'stale';
+          return;
+        }
+        this.stopCameraPlayback();
+        dragStart = {
+          id: e.pointerId, sx: e.clientX, sy: e.clientY,
+          lon: this._lon, lat: this._lat,
+        };
+        mode = 'drag';
+        canvas.style.cursor = 'grabbing';
+      } else if (pointers.size === 2) {
+        // 2 指ピンチ開始
+        const pts = [...pointers.values()];
+        pinchLast = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        mode = 'pinch';
+        dragStart = null;
+      }
     });
 
     canvas.addEventListener('pointermove', (e) => {
-      if (!this._pointerDown) return;
-      const dx = e.clientX - this._pointerStart.x;
-      const dy = e.clientY - this._pointerStart.y;
-      this._lon = this._startLonLat.lon - dx * 0.2;
-      this._lat = this._startLonLat.lat + dy * 0.2;
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      if (this.format && this.format.endsWith('180')) {
-        this._lon = Math.max(-85, Math.min(85, this._lon));
+      if (mode === 'drag' && dragStart && e.pointerId === dragStart.id) {
+        const dx = e.clientX - dragStart.sx;
+        const dy = e.clientY - dragStart.sy;
+        this._lon = dragStart.lon - dx * 0.2;
+        this._lat = dragStart.lat + dy * 0.2;
+        if (this.format && this.format.endsWith('180')) {
+          this._lon = Math.max(-85, Math.min(85, this._lon));
+        }
+        this._lat = Math.max(-85, Math.min(85, this._lat));
+      } else if (mode === 'pinch' && pointers.size === 2) {
+        // 録画中は画角変更不可（初期画角決定用）
+        if (this.isRecording()) return;
+        const pts = [...pointers.values()];
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (pinchLast && dist > 0) {
+          // 広がる（dist > pinchLast）= ズームイン → FOV を狭める
+          const factor = pinchLast / dist;
+          const next = this.camera.fov * factor;
+          this.camera.fov = Math.max(this._minFov, Math.min(this._maxFov, next));
+          this.camera.updateProjectionMatrix();
+        }
+        pinchLast = dist;
       }
-      this._lat = Math.max(-85, Math.min(85, this._lat));
     });
 
-    const release = () => {
-      this._pointerDown = false;
-      canvas.style.cursor = 'grab';
+    const release = (e) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size === 0) {
+        mode = 'none';
+        dragStart = null;
+        pinchLast = null;
+        canvas.style.cursor = 'grab';
+      } else if (pointers.size === 1) {
+        // ピンチから 1 指に戻った → 全指離れるまで新しいドラッグは始めない
+        mode = 'stale';
+        dragStart = null;
+        pinchLast = null;
+      }
     };
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
@@ -188,6 +427,9 @@ export class Viewer {
       // 慣例: 上半分 = 左目（flipY 考慮で v=0.5〜1.0 が上半分）
       this._addFullSphere(makeEye([0, 0.5], [1, 0.5]), 1);
       this._addFullSphere(makeEye([0, 0], [1, 0.5]), 2);
+    } else if (format === 'mono180') {
+      // 単眼 180° 半球（魚眼 unwarp 済み画像などをそのまま貼る）
+      this._addHalfSphere(baseTex, 0);
     } else if (format === 'sbs180') {
       this._addHalfSphere(makeEye([0, 0], [0.5, 1]), 1);
       this._addHalfSphere(makeEye([0.5, 0], [0.5, 1]), 2);
@@ -339,6 +581,85 @@ export class Viewer {
       for (let i = 0; i < totalFrames; i++) {
         const t = (i / (totalFrames - 1 || 1)) * totalDuration;
         const { lon, lat, fov } = evalCameraTimeline(timeline, t);
+        offCamera.rotation.set(
+          THREE.MathUtils.degToRad(lat),
+          THREE.MathUtils.degToRad(-lon),
+          0
+        );
+        offCamera.fov = fov;
+        offCamera.updateProjectionMatrix();
+        offCamera.updateMatrixWorld();
+
+        offRenderer.render(this.scene, offCamera);
+
+        const blob = await new Promise((resolve, reject) => {
+          offCanvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
+            'image/jpeg',
+            0.92
+          );
+        });
+        frames.push(blob);
+
+        if (onProgress) onProgress((i + 1) / totalFrames);
+        if (i % 5 === 4) await new Promise((r) => setTimeout(r, 0));
+      }
+    } finally {
+      offRenderer.dispose();
+    }
+
+    return { frames, fps };
+  }
+
+  /**
+   * 録画したサンプル列（{t, lon, lat, fov}）をオフスクリーンで再レンダーし、
+   * 各フレームを JPEG Blob として収集する。サンプル列は概ね 60Hz で密に
+   * 入っているため、隣接ペアを線形補間するだけで十分滑らか。
+   */
+  async captureRecordedSequence({ samples, width, height, fps, onProgress }) {
+    if (!samples || samples.length < 2) {
+      throw new Error('録画データが短すぎます（0.5 秒以上録画してください）');
+    }
+    const tBase = samples[0].t;
+    const totalDuration = samples[samples.length - 1].t - tBase;
+    if (totalDuration <= 0) {
+      throw new Error('録画の合計時間が 0 秒です');
+    }
+
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = width;
+    offCanvas.height = height;
+
+    const offRenderer = new THREE.WebGLRenderer({
+      canvas: offCanvas,
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
+    offRenderer.setSize(width, height, false);
+    offRenderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const initial = samples[0];
+    const offCamera = new THREE.PerspectiveCamera(initial.fov, width / height, 0.1, 1100);
+    offCamera.layers.enable(1);
+    offCamera.position.set(0, 0, 0);
+    offCamera.rotation.order = 'YXZ';
+
+    const totalFrames = Math.max(1, Math.round(totalDuration * fps));
+    const frames = [];
+
+    try {
+      let cursor = 0; // 線形探索の再開位置
+      for (let i = 0; i < totalFrames; i++) {
+        const t = (i / (totalFrames - 1 || 1)) * totalDuration + tBase;
+        while (cursor < samples.length - 2 && samples[cursor + 1].t < t) cursor++;
+        const a = samples[cursor];
+        const b = samples[cursor + 1] || a;
+        const seg = Math.max(1e-6, b.t - a.t);
+        const localT = Math.max(0, Math.min(1, (t - a.t) / seg));
+        const lon = a.lon + (b.lon - a.lon) * localT;
+        const lat = a.lat + (b.lat - a.lat) * localT;
+        const fov = a.fov + (b.fov - a.fov) * localT;
+
         offCamera.rotation.set(
           THREE.MathUtils.degToRad(lat),
           THREE.MathUtils.degToRad(-lon),
