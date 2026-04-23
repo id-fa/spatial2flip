@@ -65,6 +65,7 @@ function init() {
   initCameraWorkUI();
   initRecorderUI();
   initGyroUI();
+  initIOSHint();
 
   const previewBtn = document.getElementById('preview-button');
   const previewContainer = document.getElementById('preview-container');
@@ -105,11 +106,40 @@ function isHeicFile(file) {
   return /\.(heic|heif)$/i.test(file.name) || /image\/(heic|heif)/i.test(file.type);
 }
 
+// iOS / iPadOS 判定（iPadOS 13+ は navigator.userAgent に Macintosh が入るので touch 有無で見る）
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  if (/Macintosh/.test(ua) && 'ontouchend' in document) return true;
+  return false;
+}
+
+function initIOSHint() {
+  const hint = document.querySelector('.ios-hint');
+  if (hint && !isIOS()) hint.hidden = true;
+}
+
 async function loadImage(file) {
   const heic = isHeicFile(file);
   if (!heic && !file.type.startsWith('image/')) {
     alert('画像ファイルを選択してください / Please select an image file');
     return;
+  }
+
+  // iOS Safari で写真アプリから HEIC を選ぶと勝手に JPEG 変換されて MV-HEIC の
+  // ステレオペア構造が失われる。拡張子 .heic なのに中身が image/jpeg 等になっている
+  // ケースや、iOS で HEIC でない image/jpeg を読み込んだケースを検知して警告を出す。
+  if (isIOS() && !heic) {
+    // 拡張子は HEIC/HEIF なのに type が違う = 変換された可能性が高い
+    const nameLooksHeic = /\.(heic|heif)$/i.test(file.name);
+    if (nameLooksHeic) {
+      alert(
+        '注意: iOS Safari が HEIC を JPEG に変換した可能性があります（空間写真のステレオペアが失われています）。\n'
+        + '写真アプリから「共有」→「ファイルに保存」で一度「ファイル」App に保存し、ファイル App 側からアップロードしてください。\n\n'
+        + 'Note: iOS Safari may have converted your HEIC to JPEG (losing the spatial stereo pair).\n'
+        + 'From Photos app, use "Share → Save to Files", then upload from the Files app instead.'
+      );
+    }
   }
 
   if (state.viewer && state.viewer.isRecording()) {

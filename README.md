@@ -229,6 +229,11 @@ Service Worker が有効になると (初回オンライン訪問後):
 - **ジャイロ**:
   - iOS は HTTPS 必須かつ初回タップで許可ダイアログ
   - デスクトップブラウザは `DeviceOrientationEvent` API が存在してもイベントが発火しないため、タッチ対応端末にのみ UI を表示
+- **iOS Safari で HEIC（空間写真）をアップロードする場合**:
+  - Safari は写真アプリから画像を選択すると **HEIC を自動的に JPEG へ変換**してアップロードする挙動があり、Apple 空間写真の MV-HEIC 構造（primary + ステレオペア 3 枚）が失われて立体視できなくなります
+  - 本アプリは `accept="image/heic,image/heif,..."` を MIME タイプとして明示しているため多くのケースでは変換を回避できますが、iOS バージョンや Safari の挙動により変換される場合があります
+  - 確実に HEIC のままアップロードするには、iOS の **写真 App →「共有」→「ファイルに保存」** で一度「ファイル」App に保存し、その後ファイル App からアップロードしてください
+  - 代替案: 一度 PC / Mac に AirDrop・iCloud Drive 経由で HEIC を転送し、PC のブラウザでアップロード
 
 ## ライセンス
 
@@ -467,6 +472,11 @@ Once the Service Worker is active (after the first online visit):
 - **Gyroscope**:
   - iOS requires HTTPS and a permission dialog on first tap
   - Desktop browsers expose the `DeviceOrientationEvent` API but typically don't fire events; the UI is only shown on touch-capable devices
+- **Uploading HEIC (Spatial Photos) from iOS Safari**:
+  - Safari **auto-converts HEIC to JPEG** when you pick a photo from the Photos app, which destroys the MV-HEIC multi-image structure (primary + stereo pair) and makes stereoscopic viewing impossible
+  - This app declares `accept="image/heic,image/heif,..."` as MIME types, which avoids the conversion in most cases. Depending on iOS version / Safari behavior the conversion may still occur.
+  - To guarantee HEIC is preserved, on iOS go to **Photos → Share → Save to Files**, then upload from the Files app
+  - Alternative: AirDrop / iCloud Drive the HEIC to a Mac or PC and upload from a desktop browser
 
 ## License
 

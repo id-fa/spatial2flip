@@ -31,11 +31,15 @@
   <main>
     <section class="card">
       <label id="drop-zone" for="file-input">
-        <input type="file" id="file-input" accept="image/*,.heic,.heif" hidden>
+        <!-- iOS Safari で HEIC の自動 JPEG 変換を防ぐため、image/heic と image/heif を
+             MIME タイプとして明示する。これが無いと Photos 選択時に変換されて
+             MV-HEIC の複数画像構造（primary + 左右 stereo pair）が失われる。 -->
+        <input type="file" id="file-input" accept="image/heic,image/heif,image/jpeg,image/png,image/webp,.heic,.heif,.jpg,.jpeg,.png,.webp" hidden>
         <div class="drop-zone-content">
           <div class="drop-icon">⇪</div>
           <div>画像をドロップ または クリックして選択<br><span class="en">Drop image or click to select</span></div>
           <div class="hint">JPG / PNG / WebP / HEIC（Apple 空間写真）— すべてブラウザ内で処理されます<br><span class="en">JPG / PNG / WebP / HEIC (Apple Spatial Photo) — all processing runs in your browser</span></div>
+          <div class="hint ios-hint">iOS の方へ: Safari は写真アプリから選ぶと HEIC を自動 JPEG 変換してステレオ情報を失います。<br><strong>「ファイル」App に保存してからアップロードしてください</strong>（写真 → 共有 → ファイルに保存）<br><span class="en">iOS users: Safari auto-converts HEIC to JPEG when picking from Photos, which loses the spatial stereo pair. <strong>Save the photo to the Files app first, then upload from there</strong> (Photos → Share → Save to Files).</span></div>
         </div>
       </label>
     </section>
