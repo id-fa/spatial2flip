@@ -80,6 +80,40 @@ h2 {
   font-size: 0.85rem;
 }
 
+.en {
+  color: #8b949e;
+  font-size: 0.82em;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+h2 .en {
+  color: #6e7681;
+  font-weight: 400;
+}
+
+.format-grid label .en {
+  color: #8b949e;
+  font-size: 0.78em;
+  display: inline-block;
+  margin-top: 0.1rem;
+}
+
+.options label .en,
+.camera-palette-seconds .en {
+  color: #6e7681;
+  font-size: 0.82em;
+}
+
+.subtitle .en,
+#drop-zone .en,
+footer .en,
+#record-hint .en,
+.hint.info .en {
+  color: #8b949e;
+  font-size: 0.85em;
+}
+
 .hint.info {
   padding: 0.6rem 0.8rem;
   background: rgba(56, 139, 253, 0.08);
@@ -537,7 +571,7 @@ button.primary:disabled {
 }
 
 .camera-step-list:empty::before {
-  content: 'ステップ未設定（上のボタンから追加）';
+  content: 'ステップ未設定（上のボタンから追加）/ No steps (add from the buttons above)';
   display: block;
   padding: 0.6rem 0.8rem;
   border: 1px dashed #30363d;

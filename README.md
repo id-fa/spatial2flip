@@ -233,3 +233,241 @@ Service Worker が有効になると (初回オンライン訪問後):
 ## ライセンス
 
 MIT
+
+---
+
+# spatial2flip (English)
+
+A single-page web app that displays 360° / VR / Apple Spatial Photos / **180° fisheye** images in your browser, and exports them as looping videos — either through combined camera work (rotate / pause / zoom / figure-8), **live recording**, or **device-gyroscope-driven** viewing — or as pata-pata (flip) animations that alternate between the left and right eye views. Output is **Animated WebP / MP4 (H.264)**.
+
+**PWA-ready.** After the first visit it runs fully offline and can be installed to your home screen as an app.
+
+All processing runs inside your browser. Images are never uploaded to any server.
+
+## Key Features
+
+- **Simple Viewer**
+  - **Supported formats**: 360° Mono / VR360 SBS / VR360 OU / VR180 SBS / VR180 OU / Fisheye 180° Mono / Fisheye 180° SBS / Apple Spatial Photo (MV-HEIC)
+  - **Apple Spatial Photos** (MV-HEIC captured with iPhone 15 Pro+ / Apple Vision Pro) are auto-detected
+  - **180° fisheye** images are automatically unwarped to an equirectangular hemisphere at load time (equidistant projection, centered circle, radius = min side / 2, FOV 180°, fixed)
+  - Stereoscopic display on WebXR-capable browsers with a connected VR headset
+  - Mouse / touch drag to look around; **mouse wheel or pinch** to zoom FOV
+  - **Gyroscope**: on phone / tablet, tap the "📱 Gyro" button to aim the view by moving your device (iOS shows a permission dialog). Screen rotation is tracked live (and locked during recording).
+
+- **Live Recording**
+  - Record viewer interactions (drag / pinch / gyroscope) directly as a video
+  - A red REC indicator + elapsed seconds are shown during recording
+  - On stop, frames are re-rendered off-screen at the selected output resolution — not at viewer resolution — for a clean high-quality output
+
+- **Camera Work Settings**
+  - Save a start position (view + zoom) and build a sequence from freely combinable steps:
+    - **Rotate**: Left/Right 360° / 180° / 90° / 45°, Up/Down 90° / 45°
+    - **Zoom**: In / Out (log-space interpolation for constant-feeling zoom speed)
+    - **Figure-8**: Horizontal ∞ (small / large). Completes one loop and returns exactly to center.
+    - **Pause**: hold for N seconds
+  - Each step's duration can be inline-edited; total time updates immediately
+  - Reorder via ▲▼ buttons or drag the grip handle `⠿`
+  - "▶ Preview" plays the sequence in the viewer before exporting (auto-scrolls if needed)
+  - **JSON export / import**: save and reuse your camera work definition on different images or devices
+
+- **Pata-pata (Flip) Animation**
+  - For VR180 SBS/OU, Fisheye 180° SBS, and Spatial Photos without camera work steps, generates a video that rapidly alternates between the left and right eye views
+  - Configurable number of cycles, interval, and quality
+
+- **Output Formats**
+  - **WebP**: infinite-loop animation (plays in a single `<img>`, SNS / messenger friendly)
+  - **MP4 (H.264)**: yuv420p + faststart, SNS / iOS Safari friendly
+  - "▶ Preview" plays the result inline after conversion; the file is downloadable
+
+- **PWA (Offline Operation)**
+  - On first visit, the Service Worker caches all dependencies (Three.js / ffmpeg.wasm / libheif) in the background
+  - Subsequent visits work fully offline
+  - Installable via the URL bar on Chrome / Edge, or via "Add to Home Screen" on iOS Safari
+
+- **Fully Client-Side Processing**
+  - Upload, rendering, and encoding all happen inside your browser
+  - Nothing is uploaded to any server
+
+## Tech Stack
+
+| Library | Purpose |
+|---|---|
+| [Three.js](https://threejs.org/) r162 | Sphere mapping, WebXR stereoscopy, off-screen camera work / recording capture |
+| [ffmpeg.wasm](https://ffmpegwasm.netlify.app/) 0.12.10 | Encodes frame sets into WebP / MP4 via libwebp / libx264 |
+| [libheif-js](https://github.com/catdad-experiments/libheif-js) 1.19.8 | Decodes Apple Spatial Photos (MV-HEIC) |
+| Python 3 | Development static-file server (`serve.py`, `ThreadingHTTPServer`) |
+
+No build step. Runs on plain HTML + ES Modules + CDN assets.
+
+## Requirements
+
+- **Browser**: latest Chrome / Edge recommended (full WebXR + ES Modules support). iOS Safari also works for the main features.
+- **Python 3**: for local development. `file://` cannot run ES Modules / ffmpeg.wasm worker / Service Worker, so an HTTP server is required.
+- **Network**: at first launch, Three.js (~600 KB) and the full ffmpeg.wasm bundle (~30 MB) are fetched from CDN. The Service Worker caches everything automatically, after which the app runs offline.
+- **HTTPS**: required for production PWA deployment (`localhost` is exempt). Gyroscope on iOS also requires HTTPS.
+
+## Usage
+
+### 1. Launch
+
+```bash
+python serve.py
+# → open http://localhost:8000 in your browser
+```
+
+Change port with `python serve.py 8080`.
+
+Any static server works too:
+
+```bash
+# Node.js
+npx serve .
+
+# PHP
+php -S localhost:8000
+```
+
+### 2. Upload an Image
+
+- Drag and drop into the drop zone, or click to browse
+- Accepted: JPG / PNG / WebP / HEIC (Apple Spatial Photo)
+- Uploading a HEIC file automatically switches the format to "Spatial Photo"
+
+### 3. Select Image Format
+
+| Option | Expected Input |
+|---|---|
+| 360° Mono | 2:1 equirectangular image (standard 360° photo) |
+| VR360 SBS | Stereo 360° image, left / right side-by-side |
+| VR360 OU | Stereo 360° image, top / bottom |
+| VR180 SBS | Stereo 180° image, left / right side-by-side |
+| VR180 OU | Stereo 180° image, top / bottom |
+| Fisheye 180° Mono | Circular fisheye image (assumes centered circle, radius = min side / 2, FOV 180°) |
+| Fisheye 180° SBS | Stereo fisheye with two circular images side-by-side |
+| Spatial Photo | iPhone 15 Pro+ / Apple Vision Pro MV-HEIC (normal-FOV stereo pair) |
+
+For SBS / OU, "left / top = left eye" is the default convention. For spatial photos, image index 0 inside the MV-HEIC is treated as the left eye and index 1 as the right eye.
+
+### 4. Preview
+
+In the viewer area:
+
+- **Drag**: rotate view (360° all directions; VR180 / fisheye 180° within the front hemisphere; spatial photo disables drag)
+- **Mouse wheel / pinch**: zoom (FOV 25°–100°)
+- **📱 Gyro** (mobile / tablet): tap to enable; the view then follows the device orientation
+- **ENTER VR**: stereoscopic view on WebXR-capable browsers with a connected headset
+
+### 5. Export a Video
+
+**Output Format**: choose Animated WebP (looping) or MP4 (H.264).
+
+#### 5-A. Simple Mode (no steps set)
+
+**360° family (mono360 / sbs360 / ou360) / Fisheye 180° Mono:**
+
+- Rotation time (1–30 sec)
+  - 360° family: one full Y-axis rotation
+  - Fisheye 180° Mono: 170° horizontal sweep (avoiding the hemisphere edges)
+- FPS (10–60)
+- Resolution (square or 16:9 presets)
+- Quality
+
+**VR180 family / Fisheye 180° SBS / Spatial Photo (sbs180 / ou180 / fisheyeSbs180 / spatial):**
+
+- Cycle count (1–20 round trips)
+- Switch interval (0.1–2 sec)
+- Quality
+
+→ Generates a pata-pata animation that alternates between the left and right eye views.
+
+#### 5-B. Camera Work Mode
+
+Available for every format except Spatial Photo.
+
+1. Aim the viewer at your desired **start position** (view + zoom)
+2. Click `① Set Start Position` to save the current view
+3. Add steps from the palette:
+   - Left / Right 360° / 180° / 90° / 45°, Up / Down 90° / 45°
+   - Zoom In / Out
+   - ∞ Small / Large, Pause
+4. Edit each step's seconds inline at any time
+5. Reorder with ▲▼ buttons or the `⠿` drag handle
+6. `▶ Preview` to check the sequence
+7. `Convert` to export a video matching the sequence
+
+**JSON export / import** is available:
+
+- `⤓ Export` saves `camerawork_YYYYMMDD_HHMMSS.json` (start + steps)
+- `⤒ Import` loads a saved JSON (confirms before overwriting the current definition)
+- Use it to reuse camera work across images / devices, or to save complex motion as a template
+
+For VR180 / fisheye 180° (front-hemisphere only), **zoom in before running large rotations or the large figure-8**, otherwise you may see the black background at the hemisphere edges.
+
+#### 5-C. Live Recording Mode
+
+1. Prepare the viewer so you can freely aim it
+2. Click `● Start Recording` (red REC indicator + elapsed seconds appears)
+3. Drag / wheel / pinch / gyroscope to move the view (this is recorded)
+4. Click `■ Stop Recording` → off-screen re-rendering + encoding starts immediately
+5. Result appears under `▶ Preview` / `Download`
+
+While recording, zoom changes via pinch are disabled (zoom is fixed to the initial value), and screen rotation is locked. Output resolution / FPS / quality / format share the settings from the Video Export section above.
+
+### 6. Preview and Download
+
+After conversion:
+- `▶ Preview` shows WebP in an `<img>` tag and MP4 in a `<video controls autoplay loop>` tag, inline
+- The `Download` link saves the `.webp` / `.mp4`
+
+First-time conversion is slower because ffmpeg.wasm (~30 MB) is being loaded. Subsequent runs are fast thanks to Service Worker / browser cache — and they **work offline**.
+
+### 7. Install as PWA
+
+Once the Service Worker is active (after the first online visit):
+
+- **Chrome / Edge (PC / Android)**: click the "Install" icon on the right edge of the URL bar
+- **iOS Safari**: Share menu → "Add to Home Screen"
+- After install, the app launches in its own window and runs fully offline
+
+## Project Layout
+
+```
+.
+├── index.html            # Single-page UI
+├── manifest.webmanifest  # PWA manifest
+├── sw.js                 # Service Worker (App Shell + CDN/WASM cache)
+├── css/
+│   └── style.css
+├── js/
+│   ├── app.js            # UI bindings / state (camera work, recording, gyro, JSON I/O)
+│   ├── viewer.js         # Three.js viewer + camera work / recording capture + gyroscope
+│   ├── converter.js      # Pata-pata generation + WebP / MP4 encoding via ffmpeg.wasm
+│   ├── heic.js           # MV-HEIC decode via libheif-js
+│   └── fisheye.js        # 180° fisheye (mono / SBS) unwarp to equirectangular hemisphere
+├── icons/
+│   ├── favicon.png       # 64×64 (browser tab)
+│   ├── icon-192.png      # PWA 192×192
+│   └── icon-512.png      # PWA 512×512
+├── for_icon.png          # Source image for icons (for regeneration)
+└── serve.py              # Development static-file server (ThreadingHTTPServer)
+```
+
+## Known Limitations
+
+- Very large 360° images (8K+) may exceed browser memory limits
+- Safari's WebXR support is limited; Chrome / Edge are recommended for stereoscopy
+- MP4 has no container-level loop information; use WebP if loop playback is needed on the receiving end
+- **Fisheye 180°**:
+  - Projection model is fixed to equidistant; circle center = image center, radius = min side / 2, FOV = 180°
+  - If real-world images look distorted, the capture gear may use a different projection (equisolid / stereographic / etc.)
+- **Spatial Photo**:
+  - iOS 26 "Spatial Scene" (AI-depth-based 2D→3D conversion) is **not supported**. Only true **Spatial Photos** with a real stereo pair are handled.
+  - MV-HEIC spatial metadata (baseline / FOV / disparity) is unused; FOV is hard-coded to Apple's typical ~65°
+  - Since the rendering is planar stereo, camera work / recording is not available (pata-pata only)
+- **Gyroscope**:
+  - iOS requires HTTPS and a permission dialog on first tap
+  - Desktop browsers expose the `DeviceOrientationEvent` API but typically don't fire events; the UI is only shown on touch-capable devices
+
+## License
+
+MIT

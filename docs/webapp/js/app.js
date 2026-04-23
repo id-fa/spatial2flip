@@ -88,13 +88,13 @@ function init() {
         previewVideo.removeAttribute('src');
       }
       previewContainer.hidden = false;
-      previewBtn.textContent = '■ プレビューを閉じる';
+      previewBtn.textContent = '■ プレビューを閉じる / Close Preview';
     } else {
       previewContainer.hidden = true;
       previewImg.removeAttribute('src');
       previewVideo.pause();
       previewVideo.removeAttribute('src');
-      previewBtn.textContent = '▶ プレビュー';
+      previewBtn.textContent = '▶ プレビュー / Preview';
     }
   });
 
@@ -108,7 +108,7 @@ function isHeicFile(file) {
 async function loadImage(file) {
   const heic = isHeicFile(file);
   if (!heic && !file.type.startsWith('image/')) {
-    alert('画像ファイルを選択してください');
+    alert('画像ファイルを選択してください / Please select an image file');
     return;
   }
 
@@ -127,7 +127,7 @@ async function loadImage(file) {
       document.getElementById('after-upload').hidden = false;
       progressEl.hidden = false;
       progressBar.removeAttribute('value'); // indeterminate
-      progressText.textContent = 'HEIC をデコード中... (初回は libheif-js を読み込みます)';
+      progressText.textContent = 'HEIC をデコード中... (初回は libheif-js を読み込みます) / Decoding HEIC... (loading libheif-js on first use)';
       imageSource = await loadSpatialHeic(file);
       progressEl.hidden = true;
       progressBar.value = 0;
@@ -158,7 +158,7 @@ async function loadImage(file) {
     progressEl.hidden = true;
     progressBar.value = 0;
     console.error(err);
-    alert('画像の読み込みに失敗しました: ' + err.message);
+    alert('画像の読み込みに失敗しました / Failed to load image: ' + err.message);
   }
 }
 
@@ -208,7 +208,7 @@ function resetDownload() {
   previewImg.removeAttribute('src');
   previewVideo.pause();
   previewVideo.removeAttribute('src');
-  previewBtn.textContent = '▶ プレビュー';
+  previewBtn.textContent = '▶ プレビュー / Preview';
 }
 
 function updateConvertUI() {
@@ -234,11 +234,11 @@ function updateConvertUI() {
   const fallbackHint = document.getElementById('camera-work-fallback-hint');
   if (fallbackHint) {
     if (isFisheyeMono) {
-      fallbackHint.textContent = '（未設定時は「回転時間」で左 170° スイープ）';
+      fallbackHint.textContent = '（未設定時は「回転時間」で左 170° スイープ / If unset: 170° horizontal sweep using Rotation Time）';
     } else {
       fallbackHint.textContent = supportsPataPata
-        ? '（未設定時はパタパタアニメ）'
-        : '（未設定時は「回転時間」で左 360° 回転）';
+        ? '（未設定時はパタパタアニメ / If unset: pata-pata animation）'
+        : '（未設定時は「回転時間」で左 360° 回転 / If unset: full 360° rotation using Rotation Time）';
     }
   }
 
@@ -246,8 +246,8 @@ function updateConvertUI() {
   const overrideHint = document.getElementById('camera-work-hint-override');
   if (overrideHint) {
     overrideHint.textContent = supportsPataPata
-      ? 'ステップを 1 つ以上追加すると、パタパタではなくこの設定に従って動画を生成します'
-      : 'ステップを 1 つ以上追加すると、上の「回転時間」は使われずこの設定に従って動画を生成します';
+      ? 'ステップを 1 つ以上追加すると、パタパタではなくこの設定に従って動画を生成します / Adding one or more steps overrides the pata-pata animation with this sequence'
+      : 'ステップを 1 つ以上追加すると、上の「回転時間」は使われずこの設定に従って動画を生成します / Adding one or more steps overrides the Rotation Time above and follows this sequence instead';
   }
 
   if (isSpatial) {
@@ -330,7 +330,7 @@ function initCameraWorkUI() {
 
   clearBtn.addEventListener('click', () => {
     if (state.cameraSteps.length === 0) return;
-    if (!confirm('カメラワークの全ステップを削除しますか？')) return;
+    if (!confirm('カメラワークの全ステップを削除しますか？ / Delete all camera work steps?')) return;
     state.cameraSteps = [];
     renderCameraSteps();
   });
@@ -341,7 +341,7 @@ function initCameraWorkUI() {
 
   exportBtn.addEventListener('click', () => {
     if (state.cameraSteps.length === 0 && !state.cameraStart) {
-      alert('エクスポートする内容がありません（開始位置を設定するかステップを追加してください）');
+      alert('エクスポートする内容がありません（開始位置を設定するかステップを追加してください） / Nothing to export (set a start position or add steps)');
       return;
     }
     const data = {
@@ -371,7 +371,7 @@ function initCameraWorkUI() {
       const data = JSON.parse(text);
       const { start, steps } = validateCameraWorkJSON(data);
       if (state.cameraSteps.length > 0 || state.cameraStart) {
-        if (!confirm('現在のカメラワーク定義を上書きしてインポートしますか？')) return;
+        if (!confirm('現在のカメラワーク定義を上書きしてインポートしますか？ / Overwrite the current camera work definition with the imported one?')) return;
       }
       state.viewer.stopCameraPlayback();
       state.cameraStart = start;
@@ -379,7 +379,7 @@ function initCameraWorkUI() {
       updateCameraStartUI();
       renderCameraSteps();
     } catch (err) {
-      alert('JSON の読み込みに失敗: ' + err.message);
+      alert('JSON の読み込みに失敗 / Failed to load JSON: ' + err.message);
     } finally {
       importFile.value = '';
     }
@@ -388,7 +388,7 @@ function initCameraWorkUI() {
   playBtn.addEventListener('click', async () => {
     if (!state.cameraStart) return;
     if (state.cameraSteps.length === 0) {
-      alert('ステップを追加してください');
+      alert('ステップを追加してください / Please add at least one step');
       return;
     }
     if (state.viewer.isRecording()) return;
@@ -488,13 +488,13 @@ function updateCameraStartUI() {
   const statusEl = document.getElementById('camera-start-status');
   const s = state.cameraStart;
   if (s) {
-    setStartBtn.textContent = '① 開始位置を更新';
+    setStartBtn.textContent = '① 開始位置を更新 / Update Start Position';
     statusEl.classList.add('is-set');
-    statusEl.textContent = `保存済み: 左右 ${s.lon.toFixed(1)}° / 上下 ${s.lat.toFixed(1)}° / FOV ${s.fov.toFixed(1)}°`;
+    statusEl.textContent = `保存済み / Saved: 左右 / lon ${s.lon.toFixed(1)}° / 上下 / lat ${s.lat.toFixed(1)}° / FOV ${s.fov.toFixed(1)}°`;
   } else {
-    setStartBtn.textContent = '① 開始位置を設定';
+    setStartBtn.textContent = '① 開始位置を設定 / Set Start Position';
     statusEl.classList.remove('is-set');
-    statusEl.textContent = '未設定 — ビューアで視点／ズームを合わせてボタンを押してください';
+    statusEl.textContent = '未設定 — ビューアで視点／ズームを合わせてボタンを押してください / Not set — aim the viewer and click the button';
   }
   updateCameraButtonsEnabled();
 }
@@ -549,11 +549,11 @@ function addCameraStep(partial) {
 // 受け付けるスキーマ: "spatial2flip-camerawork/1"（schema フィールドは省略可。互換のため）。
 function validateCameraWorkJSON(data) {
   if (!data || typeof data !== 'object') {
-    throw new Error('JSON の形式が不正です');
+    throw new Error('JSON の形式が不正です / Invalid JSON format');
   }
   if (data.schema && typeof data.schema === 'string'
       && !data.schema.startsWith('spatial2flip-camerawork/')) {
-    throw new Error(`想定外のスキーマ: ${data.schema}`);
+    throw new Error(`想定外のスキーマ / Unexpected schema: ${data.schema}`);
   }
 
   let start = null;
@@ -564,12 +564,12 @@ function validateCameraWorkJSON(data) {
     if ([lon, lat, fov].every(Number.isFinite)) {
       start = { lon, lat, fov };
     } else {
-      throw new Error('start の lon/lat/fov が数値ではありません');
+      throw new Error('start の lon/lat/fov が数値ではありません / start.lon/lat/fov must be numbers');
     }
   }
 
   if (!Array.isArray(data.steps)) {
-    throw new Error('steps が配列ではありません');
+    throw new Error('steps が配列ではありません / steps must be an array');
   }
   const steps = data.steps.map((s, i) => validateCameraWorkStep(s, i));
   return { start, steps };
@@ -577,23 +577,23 @@ function validateCameraWorkJSON(data) {
 
 function validateCameraWorkStep(s, idx) {
   const n = idx + 1;
-  if (!s || typeof s !== 'object') throw new Error(`ステップ ${n} が不正`);
+  if (!s || typeof s !== 'object') throw new Error(`ステップ ${n} が不正 / Step ${n} is invalid`);
   const duration = Number(s.duration);
   if (!Number.isFinite(duration) || duration <= 0) {
-    throw new Error(`ステップ ${n}: duration が不正 (正の数である必要があります)`);
+    throw new Error(`ステップ ${n}: duration が不正 (正の数である必要があります) / Step ${n}: duration must be a positive number`);
   }
   const type = s.type;
   if (type === 'rotate') {
-    if (s.axis !== 'lon' && s.axis !== 'lat') throw new Error(`ステップ ${n}: axis は 'lon' か 'lat' である必要があります`);
+    if (s.axis !== 'lon' && s.axis !== 'lat') throw new Error(`ステップ ${n}: axis は 'lon' か 'lat' である必要があります / Step ${n}: axis must be 'lon' or 'lat'`);
     const delta = Number(s.delta);
-    if (!Number.isFinite(delta)) throw new Error(`ステップ ${n}: delta が数値ではありません`);
+    if (!Number.isFinite(delta)) throw new Error(`ステップ ${n}: delta が数値ではありません / Step ${n}: delta must be a number`);
     return { type, axis: s.axis, delta, duration };
   }
   if (type === 'pause') return { type, duration };
   if (type === 'zoom') {
     const factor = Number(s.factor);
     if (!Number.isFinite(factor) || factor <= 0) {
-      throw new Error(`ステップ ${n}: factor は正の数である必要があります`);
+      throw new Error(`ステップ ${n}: factor は正の数である必要があります / Step ${n}: factor must be a positive number`);
     }
     const direction = (s.direction === 'in' || s.direction === 'out')
       ? s.direction
@@ -604,12 +604,12 @@ function validateCameraWorkStep(s, idx) {
     const ampLon = Number(s.ampLon);
     const ampLat = Number(s.ampLat);
     if (!Number.isFinite(ampLon) || !Number.isFinite(ampLat)) {
-      throw new Error(`ステップ ${n}: ampLon / ampLat が数値ではありません`);
+      throw new Error(`ステップ ${n}: ampLon / ampLat が数値ではありません / Step ${n}: ampLon / ampLat must be numbers`);
     }
     const size = (s.size === 'small' || s.size === 'large') ? s.size : 'small';
     return { type, size, ampLon, ampLat, duration };
   }
-  throw new Error(`ステップ ${n}: 不明な type: ${type}`);
+  throw new Error(`ステップ ${n}: 不明な type / Step ${n}: unknown type: ${type}`);
 }
 
 function renderCameraSteps() {
@@ -625,8 +625,8 @@ function renderCameraSteps() {
 
     const grip = document.createElement('span');
     grip.className = 'camera-step-grip';
-    grip.title = 'ドラッグで並び替え';
-    grip.setAttribute('aria-label', 'ドラッグで並び替え');
+    grip.title = 'ドラッグで並び替え / Drag to reorder';
+    grip.setAttribute('aria-label', 'ドラッグで並び替え / Drag to reorder');
     grip.textContent = '⠿';
 
     // グリップ上での mousedown だけを DnD の対象にする
@@ -660,7 +660,7 @@ function renderCameraSteps() {
     durInput.min = '0.1';
     durInput.step = '0.5';
     durInput.value = String(step.duration);
-    durInput.title = '所要時間（秒）';
+    durInput.title = '所要時間（秒） / Duration (sec)';
     durInput.addEventListener('change', () => {
       const v = parseFloat(durInput.value);
       if (!Number.isFinite(v) || v <= 0) {
@@ -684,13 +684,13 @@ function renderCameraSteps() {
     upBtn.type = 'button';
     upBtn.dataset.move = 'up';
     upBtn.textContent = '▲';
-    upBtn.title = '上へ';
+    upBtn.title = '上へ / Move up';
     upBtn.disabled = idx === 0;
     const downBtn = document.createElement('button');
     downBtn.type = 'button';
     downBtn.dataset.move = 'down';
     downBtn.textContent = '▼';
-    downBtn.title = '下へ';
+    downBtn.title = '下へ / Move down';
     downBtn.disabled = idx === state.cameraSteps.length - 1;
     reorder.append(upBtn, downBtn);
 
@@ -698,7 +698,7 @@ function renderCameraSteps() {
     removeBtn.type = 'button';
     removeBtn.className = 'camera-step-remove';
     removeBtn.textContent = '×';
-    removeBtn.title = '削除';
+    removeBtn.title = '削除 / Remove';
 
     li.append(grip, indexSpan, labelSpan, durationWrap, reorder, removeBtn);
     list.appendChild(li);
@@ -754,24 +754,24 @@ function updateCameraStepTotal() {
 
 function formatCameraStepLabel(step) {
   if (step.type === 'pause') {
-    return `<span class="camera-step-pause">停止</span>`;
+    return `<span class="camera-step-pause">停止 / Pause</span>`;
   }
   if (step.type === 'rotate') {
     const abs = Math.abs(step.delta);
     let dirLabel;
     if (step.axis === 'lon') {
-      dirLabel = step.delta < 0 ? `← 左 ${abs}°` : `→ 右 ${abs}°`;
+      dirLabel = step.delta < 0 ? `← 左 ${abs}° / Left ${abs}°` : `→ 右 ${abs}° / Right ${abs}°`;
     } else {
-      dirLabel = step.delta > 0 ? `↑ 上 ${abs}°` : `↓ 下 ${abs}°`;
+      dirLabel = step.delta > 0 ? `↑ 上 ${abs}° / Up ${abs}°` : `↓ 下 ${abs}° / Down ${abs}°`;
     }
-    return `<span class="camera-step-arrow">${dirLabel}</span> 回転`;
+    return `<span class="camera-step-arrow">${dirLabel}</span> 回転 / Rotate`;
   }
   if (step.type === 'zoom') {
-    const label = step.direction === 'in' ? '＋ ズームイン' : '− ズームアウト';
+    const label = step.direction === 'in' ? '＋ ズームイン / Zoom In' : '− ズームアウト / Zoom Out';
     return `<span class="camera-step-zoom">${label}</span>`;
   }
   if (step.type === 'figure8') {
-    const label = step.size === 'large' ? '∞ 大きく' : '∞ 小さく';
+    const label = step.size === 'large' ? '∞ 大きく / Large' : '∞ 小さく / Small';
     return `<span class="camera-step-fig8">${label}</span>`;
   }
   return '';
@@ -794,7 +794,7 @@ function isUsingCameraSteps() {
 async function handleConvert() {
   if (!state.image) return;
   if (state.viewer.isRecording()) {
-    alert('録画中は変換できません。録画を停止してください');
+    alert('録画中は変換できません。録画を停止してください / Cannot convert while recording. Please stop recording first.');
     return;
   }
 
@@ -828,7 +828,7 @@ async function handleConvert() {
       quality = parseInt(document.getElementById('quality180').value, 10) || 75;
       fps = 30;
 
-      progressText.textContent = 'パタパタフレーム生成中...';
+      progressText.textContent = 'パタパタフレーム生成中... / Generating pata-pata frames...';
       // 空間写真と魚眼 SBS は SBS 合成済みとして sbs180 レイアウトで処理
       const layout = (isSpatial || isFisheyeSbs) ? 'sbs180' : state.format;
       const pataImage = isFisheyeSbs ? state.displayImage : state.image;
@@ -855,8 +855,8 @@ async function handleConvert() {
 
       const isCustom = state.cameraSteps.length > 0;
       progressText.textContent = isCustom
-        ? 'カメラワークからフレーム生成中...'
-        : '360° 回転フレーム生成中...';
+        ? 'カメラワークからフレーム生成中... / Generating frames from camera work...'
+        : '360° 回転フレーム生成中... / Generating 360° rotation frames...';
 
       // 再生中なら止めてから
       state.viewer.stopCameraPlayback();
@@ -874,8 +874,8 @@ async function handleConvert() {
         fps,
         onProgress: (p) => {
           progressBar.value = p * 0.4;
-          const prefix = isCustom ? 'カメラワーク' : '360° 回転';
-          progressText.textContent = `${prefix}フレーム生成中... ${Math.round(p * 100)}%`;
+          const prefix = isCustom ? 'カメラワーク / Camera work' : '360° 回転 / 360° rotation';
+          progressText.textContent = `${prefix} フレーム生成中 / Generating frames... ${Math.round(p * 100)}%`;
         },
       });
       frames = result.frames;
@@ -891,7 +891,7 @@ async function handleConvert() {
       outputFormat,
       (p) => {
         progressBar.value = 0.4 + p * 0.6;
-        progressText.textContent = `${formatLabel} エンコード中... ${Math.round(p * 100)}%`;
+        progressText.textContent = `${formatLabel} エンコード中 / Encoding... ${Math.round(p * 100)}%`;
       },
       (msg) => {
         progressText.textContent = msg;
@@ -899,7 +899,7 @@ async function handleConvert() {
     );
 
     progressBar.value = 1;
-    progressText.textContent = `完了: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム`;
+    progressText.textContent = `完了 / Done: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム / frames`;
 
     const link = document.getElementById('download-link');
     const url = URL.createObjectURL(outBlob);
@@ -912,13 +912,13 @@ async function handleConvert() {
     else if (is180) prefix = 'vr180_patapata';
     else prefix = 'rotation360';
     link.download = `${prefix}_${timestamp()}.${outputFormat}`;
-    link.textContent = `ダウンロード (${(outBlob.size / 1024).toFixed(0)} KB)`;
+    link.textContent = `ダウンロード / Download (${(outBlob.size / 1024).toFixed(0)} KB)`;
     link.hidden = false;
     link.dataset.kind = outputFormat === 'mp4' ? 'video' : 'image';
     document.getElementById('preview-button').hidden = false;
   } catch (err) {
     console.error(err);
-    progressText.textContent = 'エラー: ' + err.message;
+    progressText.textContent = 'エラー / Error: ' + err.message;
   } finally {
     button.disabled = false;
     if (recStart) recStart.disabled = state.format === 'spatial';
@@ -965,7 +965,7 @@ function updateGyroButtonState(active) {
   const btn = document.getElementById('gyro-toggle');
   if (!btn) return;
   btn.classList.toggle('is-active', active);
-  btn.textContent = active ? '📱 ジャイロ OFF' : '📱 ジャイロ ON';
+  btn.textContent = active ? '📱 ジャイロ OFF / Gyro OFF' : '📱 ジャイロ ON / Gyro ON';
 }
 
 // ===== 録画 UI =====
@@ -977,11 +977,11 @@ function initRecorderUI() {
 
   startBtn.addEventListener('click', () => {
     if (!state.image) {
-      alert('画像を読み込んでから録画を開始してください');
+      alert('画像を読み込んでから録画を開始してください / Please load an image before starting recording');
       return;
     }
     if (state.viewer.isPlayingSequence && state.viewer.isPlayingSequence()) {
-      alert('カメラワーク再生中は録画できません。停止してから再試行してください');
+      alert('カメラワーク再生中は録画できません。停止してから再試行してください / Cannot record while camera work is playing. Please stop it first.');
       return;
     }
     try {
@@ -1016,7 +1016,7 @@ function initRecorderUI() {
     document.getElementById('record-indicator').hidden = true;
 
     if (!result || result.duration < 0.5 || !result.samples || result.samples.length < 2) {
-      alert('録画が短すぎます（0.5 秒以上録画してください）');
+      alert('録画が短すぎます（0.5 秒以上録画してください） / Recording too short (please record at least 0.5 seconds)');
       setRecordingUILocked(false);
       return;
     }
@@ -1052,13 +1052,13 @@ function updateRecorderUI() {
     if (state.viewer && state.viewer.isRecording()) cancelRecording();
     startBtn.hidden = true;
     stopBtn.hidden = true;
-    if (hint) hint.textContent = '空間写真（平面ステレオ）は録画非対応です';
+    if (hint) hint.textContent = '空間写真（平面ステレオ）は録画非対応です / Spatial photos (planar stereo) do not support recording';
   } else {
     if (!state.viewer || !state.viewer.isRecording()) {
       startBtn.hidden = false;
       stopBtn.hidden = true;
     }
-    if (hint) hint.textContent = 'ドラッグ／ピンチで視点・画角操作。録画開始でビューアの操作をそのまま動画化できます';
+    if (hint) hint.textContent = 'ドラッグ／ピンチで視点・画角操作。録画開始でビューアの操作をそのまま動画化できます / Drag or pinch to change view and zoom. Start recording to capture your viewer movements as video.';
   }
   updateGyroButtonVisibility();
 }
@@ -1100,7 +1100,7 @@ async function runRecordConvert(samples) {
     const [w, h] = document.getElementById('resolution').value.split(',').map(Number);
     const quality = parseInt(document.getElementById('quality').value, 10) || 75;
 
-    progressText.textContent = '録画フレーム生成中...';
+    progressText.textContent = '録画フレーム生成中... / Generating frames from recording...';
 
     const { frames } = await state.viewer.captureRecordedSequence({
       samples,
@@ -1109,7 +1109,7 @@ async function runRecordConvert(samples) {
       fps,
       onProgress: (p) => {
         progressBar.value = p * 0.4;
-        progressText.textContent = `録画フレーム生成中... ${Math.round(p * 100)}%`;
+        progressText.textContent = `録画フレーム生成中 / Generating frames from recording... ${Math.round(p * 100)}%`;
       },
     });
 
@@ -1120,13 +1120,13 @@ async function runRecordConvert(samples) {
       frames, fps, quality, outputFormat,
       (p) => {
         progressBar.value = 0.4 + p * 0.6;
-        progressText.textContent = `${formatLabel} エンコード中... ${Math.round(p * 100)}%`;
+        progressText.textContent = `${formatLabel} エンコード中 / Encoding... ${Math.round(p * 100)}%`;
       },
       (msg) => { progressText.textContent = msg; }
     );
 
     progressBar.value = 1;
-    progressText.textContent = `完了: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム`;
+    progressText.textContent = `完了 / Done: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム / frames`;
 
     const link = document.getElementById('download-link');
     const url = URL.createObjectURL(outBlob);
@@ -1138,7 +1138,7 @@ async function runRecordConvert(samples) {
     else if (is180) prefix = 'recording_vr180';
     else prefix = 'recording_360';
     link.download = `${prefix}_${timestamp()}.${outputFormat}`;
-    link.textContent = `ダウンロード (${(outBlob.size / 1024).toFixed(0)} KB)`;
+    link.textContent = `ダウンロード / Download (${(outBlob.size / 1024).toFixed(0)} KB)`;
     link.hidden = false;
     link.dataset.kind = outputFormat === 'mp4' ? 'video' : 'image';
     document.getElementById('preview-button').hidden = false;
@@ -1147,7 +1147,7 @@ async function runRecordConvert(samples) {
     document.getElementById('result-actions').scrollIntoView({ behavior: 'smooth', block: 'center' });
   } catch (err) {
     console.error(err);
-    progressText.textContent = 'エラー: ' + err.message;
+    progressText.textContent = 'エラー / Error: ' + err.message;
   } finally {
     convertBtn.disabled = false;
   }

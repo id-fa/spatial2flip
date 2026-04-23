@@ -34,7 +34,7 @@
 <body>
   <header>
     <h1>spatial2flip</h1>
-    <p class="subtitle">360°/VR画像 → ぐるっと一回転 WebP アニメーション</p>
+    <p class="subtitle">360°/VR画像 → ぐるっと一回転 WebP アニメーション<br><span class="en">Rotate 360°/VR photos into looping WebP / MP4</span></p>
   </header>
 
   <main>
@@ -43,29 +43,29 @@
         <input type="file" id="file-input" accept="image/*,.heic,.heif" hidden>
         <div class="drop-zone-content">
           <div class="drop-icon">⇪</div>
-          <div>画像をドロップ または クリックして選択</div>
-          <div class="hint">JPG / PNG / WebP / HEIC（Apple 空間写真）— すべてブラウザ内で処理されます</div>
+          <div>画像をドロップ または クリックして選択<br><span class="en">Drop image or click to select</span></div>
+          <div class="hint">JPG / PNG / WebP / HEIC（Apple 空間写真）— すべてブラウザ内で処理されます<br><span class="en">JPG / PNG / WebP / HEIC (Apple Spatial Photo) — all processing runs in your browser</span></div>
         </div>
       </label>
     </section>
 
     <div id="after-upload" hidden>
       <section class="card">
-        <h2>画像形式</h2>
+        <h2>画像形式 <span class="en">/ Image Format</span></h2>
         <div class="format-grid">
-          <label><input type="radio" name="format" value="mono360" checked><span>360° モノラル</span></label>
-          <label><input type="radio" name="format" value="sbs360"><span>VR360 SBS（左右）</span></label>
-          <label><input type="radio" name="format" value="ou360"><span>VR360 OU（上下）</span></label>
-          <label><input type="radio" name="format" value="sbs180"><span>VR180 SBS（左右）</span></label>
-          <label><input type="radio" name="format" value="ou180"><span>VR180 OU（上下）</span></label>
-          <label><input type="radio" name="format" value="fisheyeMono180"><span>魚眼 180° モノラル</span></label>
-          <label><input type="radio" name="format" value="fisheyeSbs180"><span>魚眼 180° SBS</span></label>
-          <label><input type="radio" name="format" value="spatial"><span>空間写真（Apple MV-HEIC）</span></label>
+          <label><input type="radio" name="format" value="mono360" checked><span>360° モノラル<br><span class="en">360° Mono</span></span></label>
+          <label><input type="radio" name="format" value="sbs360"><span>VR360 SBS（左右）<br><span class="en">VR360 SBS (Side-by-Side)</span></span></label>
+          <label><input type="radio" name="format" value="ou360"><span>VR360 OU（上下）<br><span class="en">VR360 OU (Over-Under)</span></span></label>
+          <label><input type="radio" name="format" value="sbs180"><span>VR180 SBS（左右）<br><span class="en">VR180 SBS (Side-by-Side)</span></span></label>
+          <label><input type="radio" name="format" value="ou180"><span>VR180 OU（上下）<br><span class="en">VR180 OU (Over-Under)</span></span></label>
+          <label><input type="radio" name="format" value="fisheyeMono180"><span>魚眼 180° モノラル<br><span class="en">Fisheye 180° Mono</span></span></label>
+          <label><input type="radio" name="format" value="fisheyeSbs180"><span>魚眼 180° SBS<br><span class="en">Fisheye 180° SBS</span></span></label>
+          <label><input type="radio" name="format" value="spatial"><span>空間写真（Apple MV-HEIC）<br><span class="en">Spatial Photo (Apple MV-HEIC)</span></span></label>
         </div>
       </section>
 
       <section class="card">
-        <h2>プレビュー（簡易ビューア）</h2>
+        <h2>プレビュー（簡易ビューア） <span class="en">/ Preview</span></h2>
         <div id="viewer">
           <div id="record-indicator" class="record-indicator" hidden>
             <span class="record-dot"></span>
@@ -75,20 +75,20 @@
         </div>
         <div id="viewer-controls">
           <div id="vr-button-container"></div>
-          <button type="button" id="gyro-toggle" class="gyro-btn" hidden>📱 ジャイロ ON</button>
-          <button type="button" id="record-start" class="record-start-btn">● 録画開始</button>
-          <button type="button" id="record-stop" class="record-stop-btn" hidden>■ 録画停止</button>
-          <span class="hint" id="record-hint">ドラッグで視点操作。録画開始するとビューアの操作をそのまま動画化できます</span>
+          <button type="button" id="gyro-toggle" class="gyro-btn" hidden>📱 ジャイロ ON / Gyro ON</button>
+          <button type="button" id="record-start" class="record-start-btn">● 録画開始 / Start Recording</button>
+          <button type="button" id="record-stop" class="record-stop-btn" hidden>■ 録画停止 / Stop Recording</button>
+          <span class="hint" id="record-hint">ドラッグで視点操作。録画開始するとビューアの操作をそのまま動画化できます<br><span class="en">Drag to look around. Start recording to capture your viewer movements as video.</span></span>
         </div>
       </section>
 
       <section class="card">
-        <h2>動画変換</h2>
+        <h2>動画変換 <span class="en">/ Video Export</span></h2>
 
         <div class="options">
-          <label>出力形式
+          <label>出力形式 <span class="en">/ Output Format</span>
             <select id="output-format">
-              <option value="webp" selected>アニメーション WebP</option>
+              <option value="webp" selected>アニメーション WebP / Animated WebP</option>
               <option value="mp4">MP4 (H.264)</option>
             </select>
           </label>
@@ -96,14 +96,14 @@
 
         <div id="convert-360-options">
           <div class="options">
-            <label>回転時間
+            <label>回転時間 <span class="en">/ Rotation Time</span>
               <input type="number" id="duration" value="20" min="1" max="30" step="0.5">
-              <span class="unit">秒</span>
+              <span class="unit">秒 / sec</span>
             </label>
             <label>FPS
               <input type="number" id="fps" value="30" min="10" max="60">
             </label>
-            <label>解像度
+            <label>解像度 <span class="en">/ Resolution</span>
               <select id="resolution">
                 <option value="512,512">512 × 512</option>
                 <option value="768,768">768 × 768</option>
@@ -112,49 +112,49 @@
                 <option value="1280,720">1280 × 720 (16:9)</option>
               </select>
             </label>
-            <label>品質
+            <label>品質 <span class="en">/ Quality</span>
               <select id="quality">
-                <option value="60" selected>軽量 (q=60)</option>
-                <option value="75">標準 (q=75)</option>
-                <option value="90">高画質 (q=90)</option>
+                <option value="60" selected>軽量 / Light (q=60)</option>
+                <option value="75">標準 / Standard (q=75)</option>
+                <option value="90">高画質 / High (q=90)</option>
               </select>
             </label>
           </div>
 
           <details id="camera-work-details" class="camera-work">
-            <summary>カメラワーク詳細設定 <span id="camera-work-fallback-hint"></span></summary>
+            <summary>カメラワーク詳細設定 / Camera Work Settings <span id="camera-work-fallback-hint"></span></summary>
 
             <p class="hint info" id="camera-work-hint-override"></p>
 
             <div class="camera-palette">
               <div class="camera-start-row">
-                <button type="button" id="camera-set-start" class="camera-start-btn">① 開始位置を設定</button>
-                <span id="camera-start-status" class="camera-start-status">未設定 — ビューアで視点／ズームを合わせてボタンを押してください</span>
+                <button type="button" id="camera-set-start" class="camera-start-btn">① 開始位置を設定 / Set Start Position</button>
+                <span id="camera-start-status" class="camera-start-status">未設定 — ビューアで視点／ズームを合わせてボタンを押してください / Not set — aim the viewer and click the button</span>
               </div>
 
               <div class="camera-palette-row">
-                <label class="camera-palette-seconds">秒数
+                <label class="camera-palette-seconds">秒数 <span class="en">/ Duration</span>
                   <input type="number" id="camera-rotate-seconds" value="5" min="0.5" max="60" step="0.5">
-                  <span class="unit">秒</span>
+                  <span class="unit">秒 / sec</span>
                 </label>
                 <div class="camera-palette-buttons">
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-360">左 360°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="360">右 360°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-180">左 180°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="180">右 180°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-90">左 90°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="90">右 90°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-45">左 45°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="45">右 45°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="90">上 90°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="45">上 45°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="-45">下 45°</button>
-                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="-90">下 90°</button>
-                  <button type="button" class="camera-add-zoom-btn" data-zoom="in">ズームイン</button>
-                  <button type="button" class="camera-add-zoom-btn" data-zoom="out">ズームアウト</button>
-                  <button type="button" class="camera-add-fig8-btn" data-size="small">∞ 小さく</button>
-                  <button type="button" class="camera-add-fig8-btn" data-size="large">∞ 大きく</button>
-                  <button type="button" class="camera-add-pause-btn">停止</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-360">左 360° / Left 360°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="360">右 360° / Right 360°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-180">左 180° / Left 180°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="180">右 180° / Right 180°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-90">左 90° / Left 90°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="90">右 90° / Right 90°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-45">左 45° / Left 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="45">右 45° / Right 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="90">上 90° / Up 90°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="45">上 45° / Up 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="-45">下 45° / Down 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="-90">下 90° / Down 90°</button>
+                  <button type="button" class="camera-add-zoom-btn" data-zoom="in">ズームイン / Zoom In</button>
+                  <button type="button" class="camera-add-zoom-btn" data-zoom="out">ズームアウト / Zoom Out</button>
+                  <button type="button" class="camera-add-fig8-btn" data-size="small">∞ 小さく / Small</button>
+                  <button type="button" class="camera-add-fig8-btn" data-size="large">∞ 大きく / Large</button>
+                  <button type="button" class="camera-add-pause-btn">停止 / Pause</button>
                 </div>
               </div>
             </div>
@@ -162,41 +162,41 @@
             <ol id="camera-step-list" class="camera-step-list"></ol>
 
             <div class="camera-step-summary">
-              <span>合計時間: <strong id="camera-step-total">0</strong> 秒</span>
-              <span>ステップ数: <strong id="camera-step-count">0</strong></span>
+              <span>合計時間 / Total: <strong id="camera-step-total">0</strong> 秒 / sec</span>
+              <span>ステップ数 / Steps: <strong id="camera-step-count">0</strong></span>
             </div>
 
             <div class="camera-preview-controls">
-              <button type="button" id="camera-preview-play">▶ ビューアで再生</button>
-              <button type="button" id="camera-preview-stop" hidden>■ 停止</button>
-              <button type="button" id="camera-steps-clear">全削除</button>
-              <button type="button" id="camera-export-json">⤓ エクスポート</button>
-              <button type="button" id="camera-import-json">⤒ インポート</button>
+              <button type="button" id="camera-preview-play">▶ ビューアで再生 / Preview</button>
+              <button type="button" id="camera-preview-stop" hidden>■ 停止 / Stop</button>
+              <button type="button" id="camera-steps-clear">全削除 / Clear All</button>
+              <button type="button" id="camera-export-json">⤓ エクスポート / Export</button>
+              <button type="button" id="camera-import-json">⤒ インポート / Import</button>
               <input type="file" id="camera-import-file" accept="application/json,.json" hidden>
             </div>
           </details>
         </div>
 
         <div id="convert-180-options" class="options" hidden>
-          <p class="hint info" id="convert-180-hint">VR180 / 空間写真は左右視差を数回パタパタと切り替えるアニメーションとして変換します</p>
-          <label>切替サイクル数
+          <p class="hint info" id="convert-180-hint">VR180 / 空間写真は左右視差を数回パタパタと切り替えるアニメーションとして変換します<br><span class="en">VR180 / Spatial Photos are exported as a pata-pata animation that alternates between the left and right eye views.</span></p>
+          <label>切替サイクル数 <span class="en">/ Cycles</span>
             <input type="number" id="cycles" value="1" min="1" max="20">
-            <span class="unit">往復</span>
+            <span class="unit">往復 / round trips</span>
           </label>
-          <label>切替間隔
+          <label>切替間隔 <span class="en">/ Interval</span>
             <input type="number" id="interval" value="0.1" min="0.1" max="2" step="0.1">
-            <span class="unit">秒</span>
+            <span class="unit">秒 / sec</span>
           </label>
-          <label>品質
+          <label>品質 <span class="en">/ Quality</span>
             <select id="quality180">
-              <option value="60">軽量 (q=60)</option>
-              <option value="75" selected>標準 (q=75)</option>
-              <option value="90">高画質 (q=90)</option>
+              <option value="60">軽量 / Light (q=60)</option>
+              <option value="75" selected>標準 / Standard (q=75)</option>
+              <option value="90">高画質 / High (q=90)</option>
             </select>
           </label>
         </div>
 
-        <button id="convert-button" class="primary">変換開始</button>
+        <button id="convert-button" class="primary">変換開始 / Convert</button>
 
         <div id="progress" hidden>
           <progress id="progress-bar" value="0" max="1"></progress>
@@ -205,10 +205,10 @@
 
         <div id="result-actions">
           <a id="download-link" class="download-btn" hidden download></a>
-          <button id="preview-button" class="preview-btn" type="button" hidden>▶ プレビュー</button>
+          <button id="preview-button" class="preview-btn" type="button" hidden>▶ プレビュー / Preview</button>
         </div>
         <div id="preview-container" hidden>
-          <img id="preview-img" alt="変換結果のプレビュー" hidden>
+          <img id="preview-img" alt="変換結果のプレビュー / Conversion result preview" hidden>
           <video id="preview-video" controls autoplay loop muted playsinline hidden></video>
         </div>
       </section>
@@ -216,7 +216,7 @@
   </main>
 
   <footer>
-    <p>すべての処理はブラウザ内で完結し、画像はサーバーに送信されません</p>
+    <p>すべての処理はブラウザ内で完結し、画像はサーバーに送信されません<br><span class="en">All processing happens in your browser. No image is uploaded to any server.</span></p>
   </footer>
 
   <script type="module" src="js/app.js"></script>

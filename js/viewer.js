@@ -88,10 +88,10 @@ export class Viewer {
   // 同じ lon/lat/fov 軌跡をフレーム列として再レンダーする。
   startRecording() {
     if (this.renderer.xr.isPresenting) {
-      throw new Error('VR 表示中は録画できません');
+      throw new Error('VR 表示中は録画できません / Cannot record while in VR');
     }
     if (this.format === 'spatial') {
-      throw new Error('空間写真（平面ステレオ）は録画対象外です');
+      throw new Error('空間写真（平面ステレオ）は録画対象外です / Spatial photos (planar stereo) are not supported for recording');
     }
     this.stopCameraPlayback();
     // 録画中は画面回転を無視するため、開始時の画面角度を固定して使う
@@ -163,16 +163,16 @@ export class Viewer {
 
   async startGyroscope() {
     if (!this.isGyroSupported()) {
-      throw new Error('この端末はジャイロ非対応です');
+      throw new Error('この端末はジャイロ非対応です / Gyroscope not supported on this device');
     }
     if (this.format === 'spatial') {
-      throw new Error('空間写真では利用できません');
+      throw new Error('空間写真では利用できません / Not available for spatial photos');
     }
     // iOS 13+ は明示的な許可が必要（クリックハンドラ内で呼ばれる前提）
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
       const resp = await DeviceOrientationEvent.requestPermission();
       if (resp !== 'granted') {
-        throw new Error('ジャイロへのアクセスが許可されませんでした');
+        throw new Error('ジャイロへのアクセスが許可されませんでした / Permission to access gyroscope was not granted');
       }
     }
     this.stopCameraPlayback();
@@ -554,7 +554,7 @@ export class Viewer {
     const timeline = compileCameraSteps(steps, startView, this._minFov, this._maxFov);
     const totalDuration = timeline.totalDuration;
     if (totalDuration <= 0) {
-      throw new Error('カメラワークの合計時間が 0 秒です');
+      throw new Error('カメラワークの合計時間が 0 秒です / Camera work total duration is 0 seconds');
     }
 
     const offCanvas = document.createElement('canvas');
@@ -618,12 +618,12 @@ export class Viewer {
    */
   async captureRecordedSequence({ samples, width, height, fps, onProgress }) {
     if (!samples || samples.length < 2) {
-      throw new Error('録画データが短すぎます（0.5 秒以上録画してください）');
+      throw new Error('録画データが短すぎます（0.5 秒以上録画してください） / Recording too short (please record at least 0.5 seconds)');
     }
     const tBase = samples[0].t;
     const totalDuration = samples[samples.length - 1].t - tBase;
     if (totalDuration <= 0) {
-      throw new Error('録画の合計時間が 0 秒です');
+      throw new Error('録画の合計時間が 0 秒です / Recording total duration is 0 seconds');
     }
 
     const offCanvas = document.createElement('canvas');

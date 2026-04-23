@@ -30,7 +30,7 @@ async function buildWorkerBlobURL() {
 function loadFFmpeg(onStatus) {
   if (!ffmpegPromise) {
     ffmpegPromise = (async () => {
-      if (onStatus) onStatus('ffmpeg.wasm を読み込み中... (初回のみ 30MB 程度)');
+      if (onStatus) onStatus('ffmpeg.wasm を読み込み中... (初回のみ 30MB 程度) / Loading ffmpeg.wasm... (~30MB, first time only)');
 
       const [ffmpegMod, utilMod] = await Promise.all([
         import(`${FFMPEG_BASE}/index.js`),
@@ -138,14 +138,14 @@ export async function framesToVideo(frames, fps, quality, outputFormat, onProgre
   const names = [];
 
   try {
-    if (onStatus) onStatus('フレームを ffmpeg に渡しています...');
+    if (onStatus) onStatus('フレームを ffmpeg に渡しています... / Passing frames to ffmpeg...');
     for (let i = 0; i < frames.length; i++) {
       const name = `f${String(i).padStart(5, '0')}.jpg`;
       await ffmpeg.writeFile(name, await fetchFile(frames[i]));
       names.push(name);
     }
 
-    if (onStatus) onStatus(`${statusLabel} にエンコード中...`);
+    if (onStatus) onStatus(`${statusLabel} にエンコード中... / Encoding to ${statusLabel}...`);
 
     let args;
     if (isMP4) {

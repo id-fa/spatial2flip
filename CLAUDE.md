@@ -161,8 +161,8 @@ Three.js を使わず、入力画像の左右半分を別々の Canvas に描画
 
 Apple 空間写真 (MV-HEIC) は VR180 とは投影・画角が異なる（通常画角 ~65°、直線投影）ため、球面マッピングは使えない。対応方針:
 
-1. `heic.js#loadSpatialHeic` で libheif-js を使い左右画像を抽出
-2. 左を `images[0]`、右を `images[1]` として SBS 合成した Canvas を生成（既存の sbs レイアウト処理フローに合流）
+1. `heic.js#loadSpatialHeic` で libheif-js を使い全画像をデコードし、`pickStereoPair` で **同一寸法で揃っている 2 枚をステレオペアとして自動選別**（primary の 2D/depth 画像は寸法が一意なので自動で除外される）
+2. 左を `pair.left`、右を `pair.right` として SBS 合成した Canvas を生成（既存の sbs レイアウト処理フローに合流）
 3. ビューアは `_setupPlanarStereo` で PlaneGeometry × 2 を layer 1/2 に配置、カメラの前方 1m に固定
 4. パタパタ変換は SBS レイアウトとして `captureVR180PataPata` に流用（app.js で `layout = 'sbs180'` に書き換えて呼ぶ）
 5. カメラワークは原理的に使えない（平面なので視点を回しても意味がない）→ UI で `convert-360-options` 全体を非表示
@@ -350,7 +350,7 @@ python serve.py 8080 # ポート指定
 - **MP4 の音声**: 入力は静止画連番なので常に無音。`-an` を付けているが、仮に外すと音声ストリームなしで警告が出るだけなので実害はない
 - **MP4 サイズの偶数化**: 現状 `pad=ceil(iw/2)*2:ceil(ih/2)*2` で右下に 1px 黒パディングが入り得る。視覚的にはほぼ不可視だが、完全な偶数入力を渡せば発生しない
 - **libheif-js の API 形態**: `libheif-wasm/libheif-bundle.js` を `<script>` で読み込むと `window.libheif` が**そのまま**オブジェクト（`new libheif.HeifDecoder()` が呼べる状態）になる。factory 関数ではない。ただしバージョンによっては factory になる可能性もあるので `heic.js` では `typeof lib === 'function'` を両対応している
-- **MV-HEIC のステレオ順序**: Apple は左目を primary (index 0)、右目を secondary (index 1) として格納する。他ソースの HEIC では順序が違う可能性があるので、立体感が反転していたら `heic.js` で `images[0]` と `images[1]` を入れ替える
+- **MV-HEIC の画像構造**: Apple 空間写真は HEIC 内に **3 枚**のトップレベル画像を持つ: (1) primary = 2D 表示用の大きい画像（depth マップ埋め込み、例 5712×4284）、(2) 左眼ステレオ画像（中サイズ、例 2688×2016）、(3) 右眼ステレオ画像（同一寸法）。`libheif-js` の `decoder.decode()` は 3 枚すべてを配列で返すため、素朴に `images[0]` / `images[1]` を取ると左眼に primary が入り「左半分だけ表示される／パタパタが視差にならない」症状が出る。`heic.js#pickStereoPair` は同一寸法ペアを自動検出し、primary（寸法がペアと異なる）を捨てる。Apple の慣例で primary → left → right の順に並ぶので、配列出現順で左右を決定。立体感が反転していたら `pair.left` と `pair.right` を入れ替える
 - **Apple 空間シーン (Spatial Scene)**: iOS 26 の AI 深度による 2D→3D 変換は**非対応**。本物のステレオペアを持つ **空間写真 (Spatial Photo)** のみ扱う。空間シーンは深度マップ + 元画像で構成されるため、別アーキテクチャ（depth-based warping）が必要
 - **lookAt 禁止**: `_updateCameraRotation` を `camera.lookAt(x,y,z)` に戻すと lat=±90° で NaN が出て画面が真っ黒になる。必ず `rotation.order = 'YXZ'` の Euler で `rotation.set(pitch, -yaw, 0)` を使うこと（カメラワークの「上下 90°」はこの前提）
 - **fov 補間は対数空間**: `evalCameraTimeline` で zoom 区間は `exp(lerp(log(a), log(b), t))`。線形補間だと終盤に急加速するため、既に実装されているこの挙動を変えないこと
