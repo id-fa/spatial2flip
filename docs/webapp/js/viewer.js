@@ -23,7 +23,10 @@ export class Viewer {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000);
 
-    this.camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1100);
+    this._baseFov = 75;
+    this._minFov = 25;
+    this._maxFov = 100;
+    this.camera = new THREE.PerspectiveCamera(this._baseFov, 1, 0.1, 1100);
     this.camera.position.set(0, 0, 0);
     this.camera.layers.enable(1); // 左目用コンテンツも見えるようにする
 
@@ -94,6 +97,17 @@ export class Viewer {
     };
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
+
+    canvas.addEventListener('wheel', (e) => {
+      if (this.renderer.xr.isPresenting) return;
+      e.preventDefault();
+      // deltaY>0（下スクロール）= 縮小 → FOV を広げる
+      // deltaY<0（上スクロール）= 拡大 → FOV を狭める
+      const factor = Math.exp(e.deltaY * 0.0015);
+      const next = this.camera.fov * factor;
+      this.camera.fov = Math.max(this._minFov, Math.min(this._maxFov, next));
+      this.camera.updateProjectionMatrix();
+    }, { passive: false });
 
     canvas.style.cursor = 'grab';
     canvas.style.touchAction = 'none';
@@ -175,9 +189,11 @@ export class Viewer {
 
     this.format = format;
 
-    // フォーマット切替時に視点をリセット
+    // フォーマット切替時に視点とズームをリセット
     this._lon = 0;
     this._lat = 0;
+    this.camera.fov = this._baseFov;
+    this.camera.updateProjectionMatrix();
   }
 
   _addFullSphere(texture, layer) {
