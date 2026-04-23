@@ -243,6 +243,10 @@ Service Worker が有効になると (初回オンライン訪問後):
 
 MIT
 
+## 関連
+
+[360°写真をぐるっと回すムービーメーカーを作る - ふぁメモ](https://fa.hatenadiary.jp/entry/20260424/1776967542)
+
 ---
 
 # spatial2flip (English)
