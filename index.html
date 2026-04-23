@@ -69,11 +69,33 @@
           </div>
         </div>
         <div id="viewer-controls">
-          <div id="vr-button-container"></div>
-          <button type="button" id="gyro-toggle" class="gyro-btn" hidden>📱 ジャイロ ON / Gyro ON</button>
-          <button type="button" id="record-start" class="record-start-btn">● 録画開始 / Start Recording</button>
-          <button type="button" id="record-stop" class="record-stop-btn" hidden>■ 録画停止 / Stop Recording</button>
-          <span class="hint" id="record-hint">ドラッグで視点操作。録画開始するとビューアの操作をそのまま動画化できます<br><span class="en">Drag to look around. Start recording to capture your viewer movements as video.</span></span>
+          <div id="viewer-buttons">
+            <div id="vr-button-container"></div>
+            <button type="button" id="gyro-toggle" class="gyro-btn" hidden>📱 ジャイロ ON / Gyro ON</button>
+            <button type="button" id="record-start" class="record-start-btn"><span class="rec-dot">●</span> 録画開始 / Start Recording</button>
+            <button type="button" id="record-stop" class="record-stop-btn" hidden>■ 録画停止 / Stop Recording</button>
+          </div>
+          <div id="usage-guide" class="usage-guide">
+            <p class="usage-guide-title">3 つの作り方 <span class="en">/ 3 Ways to Create</span></p>
+            <ol class="usage-guide-list">
+              <li>
+                <strong>かんたん作成</strong> <span class="en">Simple</span><br>
+                下の <b>「変換開始 / Convert」</b> ボタンを押すだけ。1 周するだけのシンプルな動画ができます。<br>
+                <span class="en">Click <b>Convert</b> below — creates a simple one-rotation video.</span>
+              </li>
+              <li>
+                <strong>こだわり作成</strong> <span class="en">Custom</span><br>
+                <b>「カメラワーク詳細設定 / Camera Work Settings」</b> で動きを組み立ててから <b>「変換開始 / Convert」</b> を押します。<br>
+                <span class="en">Build your camera path in <b>Camera Work Settings</b>, then click <b>Convert</b>.</span>
+              </li>
+              <li>
+                <strong>フリー作成</strong> <span class="en">Free</span><br>
+                上の <b>「● 録画開始 / Start Recording」</b> を押してビューアをドラッグ。その動きをそのまま動画化できます。<br>
+                <span class="en">Click <b>Start Recording</b> above and drag the viewer — your movement becomes the video.</span>
+              </li>
+            </ol>
+            <p class="usage-guide-status" id="record-hint" hidden></p>
+          </div>
         </div>
       </section>
 

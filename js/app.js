@@ -1082,13 +1082,19 @@ function updateRecorderUI() {
     if (state.viewer && state.viewer.isRecording()) cancelRecording();
     startBtn.hidden = true;
     stopBtn.hidden = true;
-    if (hint) hint.textContent = '空間写真（平面ステレオ）は録画非対応です / Spatial photos (planar stereo) do not support recording';
+    if (hint) {
+      hint.textContent = '空間写真（平面ステレオ）は「フリー作成」非対応です / Spatial photos (planar stereo) do not support Free mode recording';
+      hint.hidden = false;
+    }
   } else {
     if (!state.viewer || !state.viewer.isRecording()) {
       startBtn.hidden = false;
       stopBtn.hidden = true;
     }
-    if (hint) hint.textContent = 'ドラッグ／ピンチで視点・画角操作。録画開始でビューアの操作をそのまま動画化できます / Drag or pinch to change view and zoom. Start recording to capture your viewer movements as video.';
+    if (hint) {
+      hint.textContent = '';
+      hint.hidden = true;
+    }
   }
   updateGyroButtonVisibility();
 }

@@ -187,9 +187,78 @@ footer .en,
 #viewer-controls {
   margin-top: 0.75rem;
   display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+#viewer-buttons {
+  display: flex;
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.usage-guide {
+  padding: 0.9rem 1.1rem;
+  background: rgba(56, 139, 253, 0.06);
+  border-left: 3px solid #388bfd;
+  border-radius: 4px;
+  font-size: 0.98rem;
+  line-height: 1.65;
+  color: #c9d1d9;
+}
+
+.usage-guide-title {
+  margin: 0 0 0.6rem 0;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: #e3b341;
+}
+
+.usage-guide-title .en {
+  color: #8b949e;
+  font-size: 0.82em;
+  font-weight: 400;
+}
+
+.usage-guide-list {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.usage-guide-list li {
+  margin-bottom: 0.7rem;
+}
+
+.usage-guide-list li:last-child {
+  margin-bottom: 0;
+}
+
+.usage-guide-list li strong {
+  color: #58a6ff;
+  font-size: 1.05rem;
+  margin-right: 0.25rem;
+}
+
+.usage-guide-list li b {
+  color: #e6edf3;
+  font-weight: 600;
+}
+
+.usage-guide-list .en {
+  color: #8b949e;
+  font-size: 0.85em;
+  font-weight: 400;
+}
+
+.usage-guide-status {
+  margin: 0.7rem 0 0 0;
+  padding: 0.45rem 0.7rem;
+  background: rgba(248, 81, 73, 0.08);
+  border-left: 3px solid #f85149;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  color: #c9d1d9;
 }
 
 #vr-button-container {
@@ -804,12 +873,19 @@ button.primary:disabled {
 
 .record-start-btn {
   background: transparent;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.record-start-btn .rec-dot {
   color: #f85149;
-  border: 1px solid #f85149;
 }
 
 .record-start-btn:hover:not(:disabled) {
-  background: rgba(248, 81, 73, 0.12);
+  border-color: #f85149;
+  color: #e6edf3;
 }
 
 .record-start-btn:disabled {
