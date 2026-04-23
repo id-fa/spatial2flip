@@ -28,6 +28,7 @@ export class Viewer {
     this._maxFov = 100;
     this.camera = new THREE.PerspectiveCamera(this._baseFov, 1, 0.1, 1100);
     this.camera.position.set(0, 0, 0);
+    this.camera.rotation.order = 'YXZ';
     this.camera.layers.enable(1); // 左目用コンテンツも見えるようにする
 
     this.renderer = new THREE.WebGLRenderer({
@@ -71,6 +72,7 @@ export class Viewer {
     canvas.addEventListener('pointerdown', (e) => {
       if (this.renderer.xr.isPresenting) return;
       if (this.format === 'spatial') return; // 平面ステレオは視点回転なし
+      this.stopCameraPlayback();
       this._pointerDown = true;
       this._pointerStart = { x: e.clientX, y: e.clientY };
       this._startLonLat = { lon: this._lon, lat: this._lat };
@@ -100,6 +102,7 @@ export class Viewer {
 
     canvas.addEventListener('wheel', (e) => {
       if (this.renderer.xr.isPresenting) return;
+      this.stopCameraPlayback();
       e.preventDefault();
       // deltaY>0（下スクロール）= 縮小 → FOV を広げる
       // deltaY<0（上スクロール）= 拡大 → FOV を狭める
@@ -115,13 +118,12 @@ export class Viewer {
 
   _updateCameraRotation() {
     if (this.renderer.xr.isPresenting) return;
+    // YXZ Euler: 先に Y(yaw)、次に X(pitch)。lat=±90° で lookAt が破綻するのを避ける。
+    // lon 正 = 右向き（景色は左に流れる）、lat 正 = 上向き。
     const lon = THREE.MathUtils.degToRad(this._lon);
     const lat = THREE.MathUtils.degToRad(this._lat);
-    const cosLat = Math.cos(lat);
-    const tx = Math.sin(lon) * cosLat;
-    const ty = Math.sin(lat);
-    const tz = -Math.cos(lon) * cosLat;
-    this.camera.lookAt(tx, ty, tz);
+    this.camera.rotation.order = 'YXZ';
+    this.camera.rotation.set(lat, -lon, 0);
   }
 
   _setupResize() {
@@ -143,6 +145,18 @@ export class Viewer {
 
   createVRButton() {
     return VRButton.createButton(this.renderer);
+  }
+
+  getCurrentView() {
+    return {
+      lon: this._lon,
+      lat: this._lat,
+      fov: this.camera.fov,
+    };
+  }
+
+  getFovBounds() {
+    return { min: this._minFov, max: this._maxFov, base: this._baseFov };
   }
 
   setImage(image, format) {
@@ -280,8 +294,27 @@ export class Viewer {
 
   /**
    * 左目の視点でカメラを Y 軸周りに一回転させ、各フレームを JPEG Blob として収集する。
+   * 後方互換用。内部では captureCameraSequence に委譲する。
    */
   async captureRotation({ width, height, duration, fps, onProgress }) {
+    const steps = [{ type: 'rotate', axis: 'lon', delta: -360, duration }];
+    return this.captureCameraSequence({ steps, width, height, fps, onProgress });
+  }
+
+  /**
+   * ステップ配列に沿ってカメラを動かし、各フレームを JPEG Blob として収集する。
+   * ステップ: { type: 'rotate', axis: 'lon'|'lat', delta: 度, duration: 秒 }
+   *          { type: 'pause', duration: 秒 }
+   *          { type: 'zoom', factor: 数値, duration: 秒 }
+   */
+  async captureCameraSequence({ steps, start, width, height, fps, onProgress }) {
+    const startView = normalizeStart(start, this._baseFov);
+    const timeline = compileCameraSteps(steps, startView, this._minFov, this._maxFov);
+    const totalDuration = timeline.totalDuration;
+    if (totalDuration <= 0) {
+      throw new Error('カメラワークの合計時間が 0 秒です');
+    }
+
     const offCanvas = document.createElement('canvas');
     offCanvas.width = width;
     offCanvas.height = height;
@@ -294,17 +327,25 @@ export class Viewer {
     offRenderer.setSize(width, height, false);
     offRenderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    const offCamera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1100);
+    const offCamera = new THREE.PerspectiveCamera(startView.fov, width / height, 0.1, 1100);
     offCamera.layers.enable(1);
     offCamera.position.set(0, 0, 0);
+    offCamera.rotation.order = 'YXZ';
 
-    const totalFrames = Math.max(1, Math.round(duration * fps));
+    const totalFrames = Math.max(1, Math.round(totalDuration * fps));
     const frames = [];
 
     try {
       for (let i = 0; i < totalFrames; i++) {
-        const angle = (i / totalFrames) * Math.PI * 2;
-        offCamera.rotation.set(0, angle, 0);
+        const t = (i / (totalFrames - 1 || 1)) * totalDuration;
+        const { lon, lat, fov } = evalCameraTimeline(timeline, t);
+        offCamera.rotation.set(
+          THREE.MathUtils.degToRad(lat),
+          THREE.MathUtils.degToRad(-lon),
+          0
+        );
+        offCamera.fov = fov;
+        offCamera.updateProjectionMatrix();
         offCamera.updateMatrixWorld();
 
         offRenderer.render(this.scene, offCamera);
@@ -328,11 +369,182 @@ export class Viewer {
     return { frames, fps };
   }
 
+  /**
+   * 現在のビューア上でステップを再生する（動作確認用）。
+   * lon/lat/fov を書き換えるだけで、既存のレンダループがそれを拾って描画する。
+   */
+  playCameraSequence(steps, { onEnd, onTick, start } = {}) {
+    this.stopCameraPlayback();
+
+    const startView = normalizeStart(start, this._baseFov);
+    const timeline = compileCameraSteps(steps, startView, this._minFov, this._maxFov);
+    const totalDuration = timeline.totalDuration;
+    if (totalDuration <= 0) {
+      if (onEnd) onEnd();
+      return;
+    }
+
+    // 開始位置にスナップ
+    this._lon = startView.lon;
+    this._lat = startView.lat;
+    this.camera.fov = startView.fov;
+    this.camera.updateProjectionMatrix();
+
+    this._playbackActive = true;
+    this._playbackStart = performance.now();
+
+    const applyFov = (fov) => {
+      if (Math.abs(this.camera.fov - fov) > 0.001) {
+        this.camera.fov = fov;
+        this.camera.updateProjectionMatrix();
+      }
+    };
+
+    const tick = (now) => {
+      if (!this._playbackActive) return;
+      const elapsed = (now - this._playbackStart) / 1000;
+      if (elapsed >= totalDuration) {
+        const last = timeline.segments[timeline.segments.length - 1];
+        this._lon = last.endLon;
+        this._lat = last.endLat;
+        applyFov(last.endFov);
+        this._playbackActive = false;
+        if (onTick) onTick(1);
+        if (onEnd) onEnd();
+        return;
+      }
+      const { lon, lat, fov } = evalCameraTimeline(timeline, elapsed);
+      this._lon = lon;
+      this._lat = lat;
+      applyFov(fov);
+      if (onTick) onTick(elapsed / totalDuration);
+      this._playbackRaf = requestAnimationFrame(tick);
+    };
+    this._playbackRaf = requestAnimationFrame(tick);
+  }
+
+  stopCameraPlayback() {
+    this._playbackActive = false;
+    if (this._playbackRaf) {
+      cancelAnimationFrame(this._playbackRaf);
+      this._playbackRaf = 0;
+    }
+  }
+
+  isPlayingSequence() {
+    return !!this._playbackActive;
+  }
+
   dispose() {
+    this.stopCameraPlayback();
     this.clear();
     this.renderer.setAnimationLoop(null);
     this.renderer.dispose();
     window.removeEventListener('resize', this._onResize);
     if (this._resizeObserver) this._resizeObserver.disconnect();
   }
+}
+
+function normalizeStart(start, baseFov) {
+  return {
+    lon: Number(start?.lon) || 0,
+    lat: Number(start?.lat) || 0,
+    fov: Number(start?.fov) || baseFov,
+  };
+}
+
+/**
+ * ステップ配列からタイムライン（各区間の lon/lat/fov 補間情報）を作る。
+ * 入力ステップ（app.js 側のスキーマ）:
+ *   { type: 'rotate', axis: 'lon'|'lat', delta: 度, duration: 秒 }
+ *   { type: 'pause', duration: 秒 }
+ *   { type: 'zoom', factor: 数値, duration: 秒 }  // factor<1 でズームイン、>1 でアウト
+ *   { type: 'figure8', ampLon: 度, ampLat: 度, duration: 秒 }  // 開始点を中心に横8の字を1周
+ */
+export function compileCameraSteps(steps, startView = { lon: 0, lat: 0, fov: 75 }, fovMin = 25, fovMax = 100) {
+  const segments = [];
+  let cursor = 0;
+  let lon = startView.lon;
+  let lat = startView.lat;
+  let fov = startView.fov;
+  for (const s of steps) {
+    const duration = Math.max(0, Number(s.duration) || 0);
+    if (duration <= 0) continue;
+    const startLon = lon;
+    const startLat = lat;
+    const startFov = fov;
+    let endLon = lon;
+    let endLat = lat;
+    let endFov = fov;
+    const seg = {
+      type: s.type || 'pause',
+      startTime: cursor,
+      endTime: cursor + duration,
+      startLon, startLat, startFov,
+    };
+    if (s.type === 'rotate') {
+      const delta = Number(s.delta) || 0;
+      if (s.axis === 'lon') endLon = lon + delta;
+      else if (s.axis === 'lat') endLat = lat + delta;
+    } else if (s.type === 'zoom') {
+      const factor = Number(s.factor) || 1;
+      endFov = Math.max(fovMin, Math.min(fovMax, fov * factor));
+    } else if (s.type === 'figure8') {
+      // 開始点を中心に ∞ を一周。終了時は開始点に戻る（sin(0)=sin(2π)=0）
+      seg.ampLon = Number(s.ampLon) || 0;
+      seg.ampLat = Number(s.ampLat) || 0;
+    }
+    seg.endLon = endLon;
+    seg.endLat = endLat;
+    seg.endFov = endFov;
+    segments.push(seg);
+    cursor += duration;
+    lon = endLon;
+    lat = endLat;
+    fov = endFov;
+  }
+  return { segments, totalDuration: cursor };
+}
+
+export function evalCameraTimeline(timeline, t) {
+  const { segments } = timeline;
+  if (segments.length === 0) return { lon: 0, lat: 0, fov: 75 };
+  if (t <= 0) {
+    const first = segments[0];
+    return { lon: first.startLon, lat: first.startLat, fov: first.startFov };
+  }
+  if (t >= timeline.totalDuration) {
+    const last = segments[segments.length - 1];
+    return { lon: last.endLon, lat: last.endLat, fov: last.endFov };
+  }
+  // 線形探索で十分（数十ステップ程度を想定）
+  for (const seg of segments) {
+    if (t < seg.endTime) {
+      const localT = (t - seg.startTime) / Math.max(1e-6, seg.endTime - seg.startTime);
+      if (seg.type === 'figure8') {
+        // x = A sin(t), y = (B) sin(2t), t ∈ [0, 2π]
+        const phase = localT * 2 * Math.PI;
+        return {
+          lon: seg.startLon + seg.ampLon * Math.sin(phase),
+          lat: seg.startLat + seg.ampLat * Math.sin(2 * phase),
+          fov: seg.startFov,
+        };
+      }
+      return {
+        lon: seg.startLon + (seg.endLon - seg.startLon) * localT,
+        lat: seg.startLat + (seg.endLat - seg.startLat) * localT,
+        fov: interpFovLog(seg.startFov, seg.endFov, localT),
+      };
+    }
+  }
+  const last = segments[segments.length - 1];
+  return { lon: last.endLon, lat: last.endLat, fov: last.endFov };
+}
+
+// 対数空間で fov を補間すると「一定速度のズーム」に感じられる。
+function interpFovLog(a, b, t) {
+  if (a === b) return a;
+  const la = Math.log(a);
+  const lb = Math.log(b);
+  return Math.exp(la + (lb - la) * t);
 }

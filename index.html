@@ -66,34 +66,88 @@
           </label>
         </div>
 
-        <div id="convert-360-options" class="options">
-          <label>回転時間
-            <input type="number" id="duration" value="20" min="1" max="30" step="0.5">
-            <span class="unit">秒</span>
-          </label>
-          <label>FPS
-            <input type="number" id="fps" value="30" min="10" max="60">
-          </label>
-          <label>解像度
-            <select id="resolution">
-              <option value="512,512">512 × 512</option>
-              <option value="768,768">768 × 768</option>
-              <option value="1024,1024">1024 × 1024</option>
-              <option value="960,540" selected>960 × 540 (16:9)</option>
-              <option value="1280,720">1280 × 720 (16:9)</option>
-            </select>
-          </label>
-          <label>品質
-            <select id="quality">
-              <option value="60" selected>軽量 (q=60)</option>
-              <option value="75">標準 (q=75)</option>
-              <option value="90">高画質 (q=90)</option>
-            </select>
-          </label>
+        <div id="convert-360-options">
+          <div class="options">
+            <label>回転時間
+              <input type="number" id="duration" value="20" min="1" max="30" step="0.5">
+              <span class="unit">秒</span>
+            </label>
+            <label>FPS
+              <input type="number" id="fps" value="30" min="10" max="60">
+            </label>
+            <label>解像度
+              <select id="resolution">
+                <option value="512,512">512 × 512</option>
+                <option value="768,768">768 × 768</option>
+                <option value="1024,1024">1024 × 1024</option>
+                <option value="960,540" selected>960 × 540 (16:9)</option>
+                <option value="1280,720">1280 × 720 (16:9)</option>
+              </select>
+            </label>
+            <label>品質
+              <select id="quality">
+                <option value="60" selected>軽量 (q=60)</option>
+                <option value="75">標準 (q=75)</option>
+                <option value="90">高画質 (q=90)</option>
+              </select>
+            </label>
+          </div>
+
+          <details id="camera-work-details" class="camera-work">
+            <summary>カメラワーク詳細設定 <span id="camera-work-fallback-hint"></span></summary>
+
+            <p class="hint info" id="camera-work-hint-override"></p>
+
+            <div class="camera-palette">
+              <div class="camera-start-row">
+                <button type="button" id="camera-set-start" class="camera-start-btn">① 開始位置を設定</button>
+                <span id="camera-start-status" class="camera-start-status">未設定 — ビューアで視点／ズームを合わせてボタンを押してください</span>
+              </div>
+
+              <div class="camera-palette-row">
+                <label class="camera-palette-seconds">秒数
+                  <input type="number" id="camera-rotate-seconds" value="5" min="0.5" max="60" step="0.5">
+                  <span class="unit">秒</span>
+                </label>
+                <div class="camera-palette-buttons">
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-360">左 360°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="360">右 360°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-180">左 180°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="180">右 180°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-90">左 90°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="90">右 90°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="-45">左 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lon" data-delta="45">右 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="90">上 90°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="45">上 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="-45">下 45°</button>
+                  <button type="button" class="camera-add-btn" data-axis="lat" data-delta="-90">下 90°</button>
+                  <button type="button" class="camera-add-zoom-btn" data-zoom="in">ズームイン</button>
+                  <button type="button" class="camera-add-zoom-btn" data-zoom="out">ズームアウト</button>
+                  <button type="button" class="camera-add-fig8-btn" data-size="small">∞ 小さく</button>
+                  <button type="button" class="camera-add-fig8-btn" data-size="large">∞ 大きく</button>
+                  <button type="button" class="camera-add-pause-btn">停止</button>
+                </div>
+              </div>
+            </div>
+
+            <ol id="camera-step-list" class="camera-step-list"></ol>
+
+            <div class="camera-step-summary">
+              <span>合計時間: <strong id="camera-step-total">0</strong> 秒</span>
+              <span>ステップ数: <strong id="camera-step-count">0</strong></span>
+            </div>
+
+            <div class="camera-preview-controls">
+              <button type="button" id="camera-preview-play">▶ ビューアで再生</button>
+              <button type="button" id="camera-preview-stop" hidden>■ 停止</button>
+              <button type="button" id="camera-steps-clear">全削除</button>
+            </div>
+          </details>
         </div>
 
         <div id="convert-180-options" class="options" hidden>
-          <p class="hint info">VR180 / 空間写真は左右視差を数回パタパタと切り替えるアニメーションとして変換します</p>
+          <p class="hint info" id="convert-180-hint">VR180 / 空間写真は左右視差を数回パタパタと切り替えるアニメーションとして変換します</p>
           <label>切替サイクル数
             <input type="number" id="cycles" value="1" min="1" max="20">
             <span class="unit">往復</span>
