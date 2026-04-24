@@ -133,29 +133,45 @@ export function evalCameraTimeline(timeline, t)
 
 - 360° では start を変えるとそこを起点に回転
 - VR180 では「ズームイン＋中心を前方中央からずらす」で利用範囲を調整できる
-- 従来モード（ステップ無しで 360°）は互換性のため `{ lon: 0, lat: 0, fov: 75 }` 固定起点
+- `simple` モード（回転時間のみ指定）は `cameraStart` を使わず `{ lon: 0, lat: 0, fov: 75 }` 固定起点で 1 回転または 170° スイープ
 
-### 10. 360° vs VR180 vs spatial の分岐
+### 10. 動画生成は「モード × フォーマット」でルーティング
 
-`state.format` と `state.cameraSteps.length` で動画生成方式を決める:
+動画生成方式は `state.mode`（`'record' | 'simple' | 'camera' | 'patapata'`）と `state.format` の組合せで決まる。ユーザーが UI のタブで明示的にモードを選ぶ（ステップの有無で自動分岐しない）。
 
-| format | ステップ有 | ステップ無 |
+| mode | 使う API | 役割 |
 |---|---|---|
-| mono360 / sbs360 / ou360 | `captureCameraSequence(steps, start=cameraStart)` | `captureCameraSequence([{rotate,-360,duration}], start={0,0,75})` |
-| sbs180 / ou180 | `captureCameraSequence(steps, start=cameraStart)` | `captureVR180PataPata`（従来パタパタ） |
-| spatial | （カメラワーク非対応・ステップ UI は hidden）| `captureVR180PataPata` |
+| `record` | `viewer.captureRecordedSequence({samples})` | ビューア操作の録画軌跡を動画化 |
+| `simple` | `viewer.captureCameraSequence([{rotate,-360 or -170,duration}], start={0,0,75})` | 1 回転の単純動画（360°）または 170° 水平スイープ（fisheyeMono180）|
+| `camera` | `viewer.captureCameraSequence(state.cameraSteps, start=state.cameraStart)` | ユーザー定義のカメラワーク |
+| `patapata` | `captureVR180PataPata(image, layout, {cycles, interval, fps})` | 左右視差の交互切替 |
 
-UI: `convert-360-options`（解像度 / FPS / 品質 / カメラワーク details）は spatial 以外で表示、`convert-180-options`（パタパタ設定）は spatial 常時・VR180 でステップ無しのときのみ表示。「回転時間」入力は VR180 では意味を持たないので非表示、360° でもステップが 1 つ以上ある時は disabled。
+`handleConvert` は `state.mode` を読んで分岐する（`app.js#handleConvert`）。
 
-出力ファイル名 prefix:
-- 360° + ステップ無 or 有: `rotation360_*`
-- VR180 + ステップ無: `vr180_patapata_*`
-- VR180 + ステップ有: `vr180_camera_*`
-- spatial: `spatial_patapata_*`
+**フォーマット別の利用可能モード**（`getAvailableModes(format)`）:
+
+| format | 利用可能モード |
+|---|---|
+| mono360 / sbs360 / ou360 / fisheyeMono180 | record / simple / camera |
+| sbs180 / ou180 / fisheyeSbs180 | record / simple / camera / patapata |
+| spatial | patapata のみ |
+
+フォーマット変更で現在のモードが不可になった場合は `getDefaultMode(format)` にフォールバック（spatial / VR180 / fisheyeSbs → patapata、他 → simple）。既に有効なモードは維持する（ユーザーの選択を尊重）。
+
+**UI レイアウト**:
+- 動画変換カード先頭に **常時表示の共通パラメータ** (`.convert-common`): 出力形式 / 解像度 / FPS / 品質（デフォルト q=60）。パタパタモードでは解像度は無視され元画像サイズに追従する（パネル内に注記）
+- 共通パラメータの下に 4 つの **モードタブ** (`input[name="mode"]` ラジオ + `.mode-tab` ラベル) と対応する **モードパネル** (`.mode-panel[data-mode=...]`)。利用不可タブは `hidden`、ロック中は `disabled`
+- 共通「変換開始」ボタンがアクティブモードに応じて処理を振り分ける
+
+**出力ファイル名 prefix** (`buildOutputPrefix()`):
+- record: `recording_{360|vr180|fisheye180_mono|fisheye180_sbs}_*`
+- camera: `{rotation360|vr180|fisheye180_mono|fisheye180_sbs}_camera_*`
+- patapata: `{vr180|spatial|fisheye180_sbs}_patapata_*`
+- simple: `rotation360_*` または `fisheye180_mono_*`
 
 ### 11. VR180 パタパタは 2D Canvas のみ
 
-Three.js を使わず、入力画像の左右半分を別々の Canvas に描画し、一定間隔で交互に描画してフレームを生成（`converter.js#captureVR180PataPata`）。VR180 でカメラワーク使用時はパタパタではなく `captureCameraSequence` を通る（= Three.js 経由）。
+Three.js を使わず、入力画像の左右半分を別々の Canvas に描画し、一定間隔で交互に描画してフレームを生成（`converter.js#captureVR180PataPata`）。モードが `camera` または `simple` のときは（VR180 でも）Three.js 経由の `captureCameraSequence` を通る。
 
 ### 12. Apple 空間写真は SBS 合成→平面ステレオで扱う
 
@@ -278,6 +294,75 @@ UI の「出力形式」セレクタ (`#output-format`) で選択。`converter.j
 
 並び替え完了時は `flashCameraStepRows([...ids])` で該当 li に `is-swapped` クラスを付け、`@keyframes camera-step-flash` を 1 回だけ再生（移動したことを視覚フィードバック）。DnD 時は `drop-before` / `drop-after` 擬似要素で挿入位置を青ライン表示。
 
+### 19. 録画モードは「停止 → 保持 → 変換」の 2 段階フロー
+
+以前は録画停止と同時に変換が走り、品質・FPS・解像度の調整ができなかった。現在は:
+
+1. 録画停止 → samples を `state.pendingRecordSamples = { samples, duration }` に保持するだけ
+2. ユーザーが共通パラメータ（出力形式 / 解像度 / FPS / 品質）を調整
+3. 「変換開始」ボタン押下時に `handleConvert` が `state.mode === 'record'` 分岐で `viewer.captureRecordedSequence()` を実行
+
+**保持データの破棄トリガー:**
+- 画像再アップロード（`loadImage`）
+- フォーマット切替（viewpoint の意味が変わる可能性があるため）
+- 新しい録画の開始（古いデータを破棄してから開始）
+- 録画タブの「✕ 録画を破棄」ボタン
+
+**UI 配置の非自明点:**
+- `#record-start` / `#record-discard` は録画タブパネル内
+- `#record-stop` は `#viewer-buttons`（ビューア直下）にある。録画中にユーザーがビューアをドラッグしていてタブまでスクロールで戻らなくても停止できるようにするため
+- 両方の record-stop を作らない：ID はユニーク、JS は `getElementById('record-stop')` で取得
+
+### 20. 画像未登録でも UI は全表示、ボタンだけ disable
+
+初回訪問者がアプリの機能を把握できるよう、`#after-upload` は最初から可視。`state.image` が null の間:
+- 「変換開始」ボタン → `updateConvertButtonEnabled()` が `!!state.image` で disable
+- 「録画開始」ボタン → `updateRecordPanelUI()` が `!state.image` で disable、ステータスに「画像をアップロードしてください」を表示
+- ビューア canvas は黒背景のまま。`#viewer-placeholder`（⇪ アイコン + "画像をドロップしてください"）をオーバーレイ表示
+- 画像読込成功時に `#viewer` へ `has-image` クラスを付与 → CSS が `.viewer-placeholder { display: none }` で非表示に
+
+カメラワークの「① 開始位置を設定」は画像なしでもクリック可能（`getCurrentView()` がデフォルト lon/lat/fov を返すため）。ステップを組んで JSON エクスポートする用途もあり、意図的に image-less でも動くように残している。
+
+### 21. busy 状態の一元管理とタブ／フォーマットロック
+
+`isBusy()` が録画中 / カメラワーク再生中 / 変換中の OR を返す単一のゲートとなる:
+
+```js
+function isBusy() {
+  if (state.viewer.isRecording()) return true;
+  if (state.viewer.isPlayingSequence()) return true;
+  return !!state.isConverting;
+}
+```
+
+`updateConvertUI()` がこれを見て:
+- モードタブのラジオ `disabled` を切替
+- フォーマットラジオの `disabled` を切替
+- カメラワーク編集ボタン群の `disabled` を切替
+- 「変換開始」「録画開始」の `disabled` を切替
+
+**タイミング注意:** `viewer.playCameraSequence()` は同期的に内部フラグを立てるので、呼出 **後** に `updateConvertUI()` を呼ぶ必要がある。呼出前だと `isPlayingSequence()` がまだ false で、ロックがかからない。`captureRecordedSequence` / `captureCameraSequence` は async だが、`state.isConverting` を呼出前に立てて `try/finally` で戻すので同じ問題は起きない。
+
+### 22. ラベルの日本語／英語 1 行表示と入力レイアウト
+
+`.options label` は `display: flex; flex-direction: column` なので、子要素が直接テキスト・span・input と並んでいると **それぞれが別の flex 行** になり、「出力形式 / Output Format [select]」が 3 行に割れる。
+
+対策として、HTML でテキスト + `.en` span を `<span class="label-text">` で 1 つにラップし、input + unit span を `<span class="label-control">` でラップする:
+
+```html
+<label>
+  <span class="label-text">回転時間 <span class="en">/ Rotation Time</span></span>
+  <span class="label-control">
+    <input type="number" ...>
+    <span class="unit">秒 / sec</span>
+  </span>
+</label>
+```
+
+`.label-text` は `white-space: nowrap` で JA/EN を必ず同一行に（グリッド幅 minmax(200px,1fr) に収まる前提）。`.label-control` は `display: flex` で input + unit を横並びに。
+
+新しい数値入力系 UI を `.options` 内に足すときはこの構造に合わせること。
+
 ## ffmpeg.wasm のクロスオリジン Worker 問題（非自明）
 
 ### 問題
@@ -321,24 +406,32 @@ python serve.py 8080 # ポート指定
 3. ドラッグ操作で視点が自然に回るか（spatial はドラッグ無効）
 4. マウスホイールで拡大・縮小ができるか（25°〜100° FOV クランプ、フォーマット切替で 75° にリセット）
 5. WebXR 対応環境で「ENTER VR」ボタンが有効化されるか、VR 時に左右の目に別画像が見えるか
-6. **カメラワーク**:
+6. **モード UI**:
+   - 画像未登録でも UI は全表示（ビューアはプレースホルダー）、録画開始・変換開始ボタンだけ disable
+   - mono360 系は 3 タブ、VR180/fisheyeSbs は 4 タブ、spatial はパタパタタブのみ表示
+   - フォーマット変更で現モードが不可になれば自動フォールバック、有効なモードは維持
+7. **カメラワーク** (`camera` モード):
    - 開始位置未設定時、全てのステップ追加／プレビュー／全削除ボタンが disabled
    - ビューアを動かしてから開始位置を設定するとステータスが緑で表示される
    - ±360/180/90/45° / 上下 90/45° / ズームイン/アウト / 図 8 小/大 / 停止 を組合せて追加できる
    - 各行の秒数 input で duration を即時変更、合計時間も即座に更新
    - ▲▼ / DnD（グリップ `⠿`）で並び替え、移動した行が青くフラッシュ
    - 「▶ ビューアで再生」でビューアが画面内に収まっていなければスクロール後に再生、開始位置にスナップして進行
-   - 再生中に canvas をドラッグ／ホイールで自動停止
+   - 再生中に canvas をドラッグ／ホイールで自動停止、モードタブ・フォーマット・変換開始も自動ロック
    - 上下 90° で真上・真下が正しく表示される（Euler YXZ 方式）
-7. 360° 変換が指定時間で一回転し、連続的な WebP アニメになるか（ステップ無し）
-8. 360° でカメラワーク設定時、そのシーケンス通りの動画が出力されるか
-9. VR180 でステップ無しのときパタパタ、ステップ有のときカメラワーク（`vr180_camera_*.{webp,mp4}`）に切り替わるか
-10. 図 8 ステップ前後で lon/lat が正しく中心に戻り、連続ステップで継目がガタつかないか
-11. ズームステップが対数補間で一定速度に感じられるか（線形だと終盤に急加速して見える）
-12. VR180 / spatial 変換で左右視差が指定間隔でパタパタ切り替わるか（ステップ無し時のフォールバック）
-13. 変換後に「▶ プレビュー」ボタンで即時にインライン再生できるか（WebP は `<img>`、MP4 は `<video>` で表示される）
-14. ダウンロードされた WebP / MP4 が他アプリでも再生できるか
-15. 出力形式セレクタを MP4 に切り替えた場合、拡張子 `.mp4` で保存され、奇数解像度（例 960×540 ではなく 961×541 相当のキャプチャ）でも H.264 エンコードが通るか
+8. **録画** (`record` モード):
+   - 「録画開始」でビューア上に REC インジケータ、ビューア直下に「録画停止」ボタンが出現
+   - 停止→「録画データ保持中: X.X 秒 / N サンプル」表示、即座に変換は走らない
+   - 共通パラメータ（品質／FPS／解像度）を調整してから「変換開始」で動画生成
+   - フォーマット変更・画像再アップロード・新しい録画開始・✕ ボタンで保持データが破棄される
+9. **かんたん** (`simple` モード): 360° は指定秒数で一回転、fisheyeMono180 は 170° 水平スイープ
+10. **パタパタ** (`patapata` モード): 左右視差を指定間隔・サイクル数で交互切替（VR180 / fisheyeSbs / spatial）
+11. 図 8 ステップ前後で lon/lat が正しく中心に戻り、連続ステップで継目がガタつかないか
+12. ズームステップが対数補間で一定速度に感じられるか（線形だと終盤に急加速して見える）
+13. 録画・再生・変換中にモードタブ／フォーマットラジオが disabled になるか
+14. 変換後に「▶ プレビュー」ボタンで即時にインライン再生できるか（WebP は `<img>`、MP4 は `<video>` で表示される）
+15. ダウンロードされた WebP / MP4 が他アプリでも再生できるか
+16. 出力形式セレクタを MP4 に切り替えた場合、拡張子 `.mp4` で保存され、奇数解像度（例 960×540 ではなく 961×541 相当のキャプチャ）でも H.264 エンコードが通るか
 
 ### よくある落とし穴
 
@@ -357,6 +450,9 @@ python serve.py 8080 # ポート指定
 - **figure-8 は start=end**: `compileCameraSteps` で figure-8 セグメントは `endLon=startLon, endLat=startLat`（中心帰還）。Lissajous の `sin(0)=sin(2π)=0` に依存しているので duration 端の扱いを変えると継目がガタつく
 - **VR180 での広角カメラワーク**: VR180 は前方半球しかないので、`cameraStart.fov` を絞らずに大振幅（±180° lon / 図 8 大）を使うと黒背景が見えてしまう。UI 側で警告は出していないが、動作は壊れない
 - **カメラワーク状態のライフサイクル**: `state.cameraStart` と `state.cameraSteps` はフォーマット切替や再アップロードでも保持される（ユーザが明示的に更新・削除するまで）。setImage は viewer 内の `_lon/_lat/fov` をリセットするが、これらは別軸
+- **録画 samples のライフサイクル**: `state.pendingRecordSamples` は **画像再アップロード / フォーマット切替 / 新規録画開始 / 録画タブの ✕ ボタン** のいずれかで破棄。モードタブの切替では保持される（パラメータ調整のため別タブに行って戻ってきても残っている必要があるため）
+- **busy 状態更新のタイミング**: `viewer.playCameraSequence()` は同期的に内部フラグを立てるため、`updateConvertUI()` は **呼出の後** に走らせないと `isPlayingSequence()` がまだ false のままでロックが掛からない。`captureRecordedSequence` / `captureCameraSequence` は async なので代わりに `state.isConverting = true` を呼出前にセットして `try/finally` で戻す（ここは順序を変えないこと）
+- **モード UI の labels は 3 段構成**: `.options label` は `display: flex; flex-direction: column`。子要素として生テキスト + `<span class="en">` を並べると**各々が別行**になってしまうため、必ず `<span class="label-text">...</span>` と `<span class="label-control">[input]<span class="unit">...</span></span>` でラップすること
 
 ## 外部ドキュメント
 

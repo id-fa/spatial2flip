@@ -81,7 +81,7 @@
       </label>
     </section>
 
-    <div id="after-upload" hidden>
+    <div id="after-upload">
       <section class="card">
         <h2>画像形式 <span class="en">/ Image Format</span></h2>
         <div class="format-grid">
@@ -99,6 +99,10 @@
       <section class="card">
         <h2>プレビュー（簡易ビューア） <span class="en">/ Preview</span></h2>
         <div id="viewer">
+          <div id="viewer-placeholder" class="viewer-placeholder">
+            <div class="viewer-placeholder-icon">⇪</div>
+            <div>画像をドロップしてください<br><span class="en">Drop an image to start</span></div>
+          </div>
           <div id="record-indicator" class="record-indicator" hidden>
             <span class="record-dot"></span>
             <span class="record-text">REC</span>
@@ -109,29 +113,28 @@
           <div id="viewer-buttons">
           <div id="vr-button-container"></div>
           <button type="button" id="gyro-toggle" class="gyro-btn" hidden>📱 ジャイロ ON / Gyro ON</button>
-            <button type="button" id="record-start" class="record-start-btn"><span class="rec-dot">●</span> 録画開始 / Start Recording</button>
           <button type="button" id="record-stop" class="record-stop-btn" hidden>■ 録画停止 / Stop Recording</button>
           </div>
           <div id="usage-guide" class="usage-guide">
-            <p class="usage-guide-title">3 つの作り方 <span class="en">/ 3 Ways to Create</span></p>
+            <p class="usage-guide-title">4 つの作り方 <span class="en">/ 4 Ways to Create</span></p>
             <ol class="usage-guide-list">
               <li>
-                <strong>かんたん作成</strong> <span class="en">Simple</span><br>
-                下の <b>「変換開始 / Convert」</b> ボタンを押すだけ。1 周するだけのシンプルな動画ができます。<br>
-                <span class="en">Click <b>Convert</b> below — creates a simple one-rotation video.</span>
+                <strong>🔴 録画</strong> <span class="en">Record</span> —
+                ビューアをドラッグした軌跡をそのまま動画化 / Your drag becomes the video
               </li>
               <li>
-                <strong>こだわり作成</strong> <span class="en">Custom</span><br>
-                <b>「カメラワーク詳細設定 / Camera Work Settings」</b> で動きを組み立ててから <b>「変換開始 / Convert」</b> を押します。<br>
-                <span class="en">Build your camera path in <b>Camera Work Settings</b>, then click <b>Convert</b>.</span>
+                <strong>🎯 かんたん</strong> <span class="en">Simple</span> —
+                1 回転するだけの単純な動画 / Single rotation
               </li>
               <li>
-                <strong>フリー作成</strong> <span class="en">Free</span><br>
-                上の <b>「● 録画開始 / Start Recording」</b> を押してビューアをドラッグ。その動きをそのまま動画化できます。<br>
-                <span class="en">Click <b>Start Recording</b> above and drag the viewer — your movement becomes the video.</span>
+                <strong>🎬 カメラワーク</strong> <span class="en">Camera Work</span> —
+                回転・ズーム・図 8 などを組み立てる / Build a custom path
+              </li>
+              <li>
+                <strong>🔄 パタパタ</strong> <span class="en">Pata-pata</span> —
+                左右視差を交互切替（VR180 / 空間写真）/ Alternate L/R eyes
               </li>
             </ol>
-            <p class="usage-guide-status" id="record-hint" hidden></p>
           </div>
         </div>
       </section>
@@ -139,35 +142,36 @@
       <section class="card">
         <h2>動画変換 <span class="en">/ Video Export</span></h2>
 
-        <div class="options">
-          <label>出力形式 <span class="en">/ Output Format</span>
+        <div class="options convert-common">
+          <label>
+            <span class="label-text">出力形式 <span class="en">/ Output Format</span></span>
             <select id="output-format">
               <option value="webp" selected>アニメーション WebP / Animated WebP</option>
               <option value="mp4">MP4 (H.264)</option>
             </select>
           </label>
-        </div>
-
-        <div id="convert-360-options">
-          <div class="options">
-            <label>回転時間 <span class="en">/ Rotation Time</span>
-              <input type="number" id="duration" value="20" min="1" max="30" step="0.5">
-              <span class="unit">秒 / sec</span>
-            </label>
-            <label>FPS
-              <input type="number" id="fps" value="30" min="10" max="60">
-            </label>
-            <label>解像度 <span class="en">/ Resolution</span>
+          <label>
+            <span class="label-text">解像度 <span class="en">/ Resolution</span></span>
               <select id="resolution">
+              <option value="256,256">256 × 256 (テスト用 / Test)</option>
+              <option value="384,384">384 × 384</option>
                 <option value="512,512">512 × 512</option>
                 <option value="768,768">768 × 768</option>
                 <option value="1024,1024">1024 × 1024</option>
+              <option value="640,360">640 × 360 (16:9)</option>
                 <option value="960,540" selected>960 × 540 (16:9)</option>
                 <option value="1280,720">1280 × 720 (16:9)</option>
               </select>
             </label>
-            <label>品質 <span class="en">/ Quality</span>
+          <label>
+            <span class="label-text">FPS</span>
+            <input type="number" id="fps" value="30" min="10" max="60">
+          </label>
+          <label>
+            <span class="label-text">品質 <span class="en">/ Quality</span></span>
               <select id="quality">
+              <option value="20">テスト用 / Test (q=20)</option>
+              <option value="40">最軽量 / Lowest (q=40)</option>
                 <option value="60" selected>軽量 / Light (q=60)</option>
                 <option value="75">標準 / Standard (q=75)</option>
                 <option value="90">高画質 / High (q=90)</option>
@@ -175,10 +179,53 @@
             </label>
           </div>
 
-          <details id="camera-work-details" class="camera-work">
-            <summary>カメラワーク詳細設定 / Camera Work Settings <span id="camera-work-fallback-hint"></span></summary>
+        <div class="mode-tabs" role="tablist">
+          <label class="mode-tab" data-mode="record" title="ビューアをドラッグした動きで作る / Free-form drag recording">
+            <input type="radio" name="mode" value="record">
+            <span class="mode-tab-icon">🔴</span>
+            <span class="mode-tab-title">録画<br><span class="en">Record</span></span>
+          </label>
+          <label class="mode-tab" data-mode="simple" title="1 回転するだけの単純動画 / Single rotation">
+            <input type="radio" name="mode" value="simple" checked>
+            <span class="mode-tab-icon">🎯</span>
+            <span class="mode-tab-title">かんたん<br><span class="en">Simple</span></span>
+          </label>
+          <label class="mode-tab" data-mode="camera" title="回転・ズーム・図 8 を組み立てる / Build custom path">
+            <input type="radio" name="mode" value="camera">
+            <span class="mode-tab-icon">🎬</span>
+            <span class="mode-tab-title">カメラワーク<br><span class="en">Camera Work</span></span>
+          </label>
+          <label class="mode-tab" data-mode="patapata" title="左右視差パタパタ切替 / Alternate L/R">
+            <input type="radio" name="mode" value="patapata">
+            <span class="mode-tab-icon">🔄</span>
+            <span class="mode-tab-title">パタパタ<br><span class="en">Pata-pata</span></span>
+          </label>
+        </div>
 
-            <p class="hint info" id="camera-work-hint-override"></p>
+        <div class="mode-panel" data-mode="record" hidden>
+          <p class="hint info">ビューアをドラッグして動かした軌跡をそのまま動画化します。停止後に上の出力設定を調整してから「変換開始」を押してください。<br><span class="en">Your drag trajectory becomes the video. After stopping, adjust the output settings above, then click Convert.</span></p>
+          <div class="record-panel-buttons">
+            <button type="button" id="record-start" class="record-start-btn"><span class="rec-dot">●</span> 録画開始 / Start Recording</button>
+            <button type="button" id="record-discard" class="record-discard-btn" hidden>✕ 録画を破棄 / Discard</button>
+          </div>
+          <p id="record-status" class="record-status is-empty">録画データなし / No recording</p>
+        </div>
+
+        <div class="mode-panel" data-mode="simple" hidden>
+          <p class="hint info" id="simple-hint">画像を 1 回転させる単純な動画を作ります / Creates a simple single-rotation video</p>
+          <div class="options">
+            <label>
+              <span class="label-text">回転時間 <span class="en">/ Rotation Time</span></span>
+              <span class="label-control">
+                <input type="number" id="duration" value="20" min="1" max="30" step="0.5">
+                <span class="unit">秒 / sec</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="mode-panel" data-mode="camera" hidden>
+          <p class="hint info">開始位置を設定してから回転・ズーム・図 8 などのステップを組み立ててください / Set a start position, then build steps</p>
 
             <div class="camera-palette">
               <div class="camera-start-row">
@@ -228,26 +275,27 @@
               <button type="button" id="camera-import-json">⤒ インポート / Import</button>
               <input type="file" id="camera-import-file" accept="application/json,.json" hidden>
             </div>
-          </details>
         </div>
 
-        <div id="convert-180-options" class="options" hidden>
-          <p class="hint info" id="convert-180-hint">VR180 / 空間写真は左右視差を数回パタパタと切り替えるアニメーションとして変換します<br><span class="en">VR180 / Spatial Photos are exported as a pata-pata animation that alternates between the left and right eye views.</span></p>
-          <label>切替サイクル数 <span class="en">/ Cycles</span>
+        <div class="mode-panel" data-mode="patapata" hidden>
+          <p class="hint info">左右視差を一定間隔で交互に切り替えるアニメーション（VR180 / 空間写真向け）<br><span class="en">Alternates the left/right eye views at a fixed interval (for VR180 / Spatial photos)</span></p>
+          <div class="options">
+            <label>
+              <span class="label-text">切替サイクル数 <span class="en">/ Cycles</span></span>
+              <span class="label-control">
             <input type="number" id="cycles" value="1" min="1" max="20">
             <span class="unit">往復 / round trips</span>
+              </span>
           </label>
-          <label>切替間隔 <span class="en">/ Interval</span>
+            <label>
+              <span class="label-text">切替間隔 <span class="en">/ Interval</span></span>
+              <span class="label-control">
             <input type="number" id="interval" value="0.1" min="0.1" max="2" step="0.1">
             <span class="unit">秒 / sec</span>
+              </span>
           </label>
-          <label>品質 <span class="en">/ Quality</span>
-            <select id="quality180">
-              <option value="60">軽量 / Light (q=60)</option>
-              <option value="75" selected>標準 / Standard (q=75)</option>
-              <option value="90">高画質 / High (q=90)</option>
-            </select>
-          </label>
+          </div>
+          <p class="hint patapata-note">※ パタパタの解像度は元画像サイズに追従します（上の「解像度」設定は使われません）<br><span class="en">Pata-pata uses the source image size; the Resolution above is ignored.</span></p>
         </div>
 
         <button id="convert-button" class="primary">変換開始 / Convert</button>

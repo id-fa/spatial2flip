@@ -7,11 +7,14 @@ const state = {
   image: null,
   imageUrl: null,
   format: 'mono360',
+  mode: 'simple', // 'record' | 'simple' | 'camera' | 'patapata'
   viewer: null,
   cameraSteps: [],
   cameraStepIdSeq: 0,
   cameraStart: null, // { lon, lat, fov } — 開始位置を設定されるまで null
+  pendingRecordSamples: null, // { samples, duration } — 録画停止後～変換前の保持データ
   recordTimerRaf: 0,
+  isConverting: false,
   // 魚眼 unwarp キャッシュ（state.image が更新されたら無効化）
   displayImage: null,       // 実際にビューアに渡す画像（魚眼なら unwarp 済み）
   unwarpedMono: null,
@@ -55,6 +58,8 @@ function init() {
       if (r.checked) {
         state.format = r.value;
         if (state.image) applyViewerImage();
+        // フォーマットを跨ぐと録画データの視点情報が意味を失う可能性があるため破棄
+        if (state.pendingRecordSamples) state.pendingRecordSamples = null;
         updateConvertUI();
       }
     });
@@ -62,6 +67,7 @@ function init() {
 
   document.getElementById('convert-button').addEventListener('click', handleConvert);
 
+  initModeTabs();
   initCameraWorkUI();
   initRecorderUI();
   initGyroUI();
@@ -130,7 +136,6 @@ async function loadImage(file) {
   // ステレオペア構造が失われる。拡張子 .heic なのに中身が image/jpeg 等になっている
   // ケースや、iOS で HEIC でない image/jpeg を読み込んだケースを検知して警告を出す。
   if (isIOS() && !heic) {
-    // 拡張子は HEIC/HEIF なのに type が違う = 変換された可能性が高い
     const nameLooksHeic = /\.(heic|heif)$/i.test(file.name);
     if (nameLooksHeic) {
       alert(
@@ -154,7 +159,6 @@ async function loadImage(file) {
     let imageSource;
 
     if (heic) {
-      document.getElementById('after-upload').hidden = false;
       progressEl.hidden = false;
       progressBar.removeAttribute('value'); // indeterminate
       progressText.textContent = 'HEIC をデコード中... (初回は libheif-js を読み込みます) / Decoding HEIC... (loading libheif-js on first use)';
@@ -175,15 +179,17 @@ async function loadImage(file) {
     }
 
     state.image = imageSource;
-    // 新しい画像 → 魚眼 unwarp キャッシュを破棄
+    // 新しい画像 → 魚眼 unwarp キャッシュ／録画データを破棄
     state.unwarpedMono = null;
     state.unwarpedSbs = null;
     state.displayImage = null;
+    state.pendingRecordSamples = null;
     applyViewerImage();
-    document.getElementById('after-upload').hidden = false;
+    document.getElementById('viewer').classList.add('has-image');
 
     resetDownload();
     progressEl.hidden = true;
+    updateConvertUI();
   } catch (err) {
     progressEl.hidden = true;
     progressBar.value = 0;
@@ -196,6 +202,8 @@ function selectFormat(format) {
   state.format = format;
   const radio = document.querySelector(`input[name="format"][value="${format}"]`);
   if (radio) radio.checked = true;
+  // フォーマット変更で録画データ破棄（視点情報の意味が失われる可能性）
+  if (state.pendingRecordSamples) state.pendingRecordSamples = null;
   updateConvertUI();
 }
 
@@ -215,10 +223,6 @@ function applyViewerImage() {
     state.displayImage = state.image;
     state.viewer.setImage(state.image, state.format);
   }
-}
-
-function isFisheyeFormat(f) {
-  return f === 'fisheyeMono180' || f === 'fisheyeSbs180';
 }
 
 function resetDownload() {
@@ -241,51 +245,102 @@ function resetDownload() {
   previewBtn.textContent = '▶ プレビュー / Preview';
 }
 
-function updateConvertUI() {
-  const isSpatial = state.format === 'spatial';
-  const is180 = state.format.endsWith('180');
-  const isFisheyeMono = state.format === 'fisheyeMono180';
-  // パタパタ対象かどうか = ステレオペアを持つ 180°（VR180 SBS/OU、魚眼 SBS、spatial）
-  const supportsPataPata = !isFisheyeMono && (isSpatial || is180);
-  const hasSteps = state.cameraSteps.length > 0;
-  const useCameraWork = !isSpatial && hasSteps;
+// ===== モードタブ =====
 
-  // convert-360-options は spatial 以外（= mono360/sbs360/ou360/sbs180/ou180/fisheye*）で表示
-  document.getElementById('convert-360-options').hidden = isSpatial;
-  // パタパタ設定は spatial 常時、または VR180/魚眼 SBS でカメラワーク未設定時のみ
-  document.getElementById('convert-180-options').hidden =
-    !isSpatial && !(supportsPataPata && !useCameraWork);
-
-  // 「回転時間」は 360° 系と魚眼モノ 180° で使う（パタパタ対象フォーマットでは非表示）
-  const durationLabel = document.getElementById('duration').closest('label');
-  if (durationLabel) durationLabel.hidden = supportsPataPata;
-
-  // カメラワーク summary のフォールバックヒント
-  const fallbackHint = document.getElementById('camera-work-fallback-hint');
-  if (fallbackHint) {
-    if (isFisheyeMono) {
-      fallbackHint.textContent = '（未設定時は「回転時間」で左 170° スイープ / If unset: 170° horizontal sweep using Rotation Time）';
-    } else {
-      fallbackHint.textContent = supportsPataPata
-        ? '（未設定時はパタパタアニメ / If unset: pata-pata animation）'
-        : '（未設定時は「回転時間」で左 360° 回転 / If unset: full 360° rotation using Rotation Time）';
-    }
-  }
-
-  // カメラワーク内のオーバーライドヒント
-  const overrideHint = document.getElementById('camera-work-hint-override');
-  if (overrideHint) {
-    overrideHint.textContent = supportsPataPata
-      ? 'ステップを 1 つ以上追加すると、パタパタではなくこの設定に従って動画を生成します / Adding one or more steps overrides the pata-pata animation with this sequence'
-      : 'ステップを 1 つ以上追加すると、上の「回転時間」は使われずこの設定に従って動画を生成します / Adding one or more steps overrides the Rotation Time above and follows this sequence instead';
-  }
-
-  if (isSpatial) {
-    state.viewer?.stopCameraPlayback();
-  }
-  updateDurationEnabledState();
-  updateRecorderUI();
+function initModeTabs() {
+  document.querySelectorAll('input[name="mode"]').forEach((r) => {
+    r.addEventListener('change', () => {
+      if (!r.checked) return;
+      // 録画／再生／変換中はタブ切替不可（input.disabled で抑止しているが念のため）
+      if (isBusy()) {
+        // 元に戻す
+        const prev = document.querySelector(`input[name="mode"][value="${state.mode}"]`);
+        if (prev) prev.checked = true;
+        return;
+      }
+      state.mode = r.value;
+      // カメラワーク以外に切り替えたら再生は停止
+      if (state.mode !== 'camera') state.viewer?.stopCameraPlayback();
+      updateConvertUI();
+    });
+  });
 }
+
+function getAvailableModes(format) {
+  if (format === 'spatial') return ['patapata'];
+  const supportsPataPata = (format === 'sbs180' || format === 'ou180' || format === 'fisheyeSbs180');
+  const modes = ['record', 'simple', 'camera'];
+  if (supportsPataPata) modes.push('patapata');
+  return modes;
+}
+
+function getDefaultMode(format) {
+  if (format === 'spatial') return 'patapata';
+  if (format === 'sbs180' || format === 'ou180' || format === 'fisheyeSbs180') return 'patapata';
+  return 'simple';
+}
+
+function isBusy() {
+  if (!state.viewer) return false;
+  if (state.viewer.isRecording()) return true;
+  if (state.viewer.isPlayingSequence && state.viewer.isPlayingSequence()) return true;
+  return !!state.isConverting;
+}
+
+function updateConvertUI() {
+  const available = getAvailableModes(state.format);
+  const availableSet = new Set(available);
+  const busy = isBusy();
+
+  // 現在のモードが不可ならデフォルトへフォールバック
+  if (!availableSet.has(state.mode)) {
+    state.mode = getDefaultMode(state.format);
+  }
+  const currentRadio = document.querySelector(`input[name="mode"][value="${state.mode}"]`);
+  if (currentRadio && !currentRadio.checked) currentRadio.checked = true;
+
+  // タブの表示／活性
+  document.querySelectorAll('.mode-tab').forEach((tab) => {
+    const m = tab.dataset.mode;
+    const isAvail = availableSet.has(m);
+    tab.hidden = !isAvail;
+    const disabled = !isAvail || busy;
+    const inputEl = tab.querySelector('input[name="mode"]');
+    if (inputEl) inputEl.disabled = disabled;
+    tab.classList.toggle('is-disabled', disabled);
+  });
+
+  // パネルの表示
+  document.querySelectorAll('.mode-panel').forEach((p) => {
+    p.hidden = p.dataset.mode !== state.mode;
+  });
+
+  // フォーマットラジオは busy 中だけロック（カメラワーク編集中は切替可）
+  document.querySelectorAll('input[name="format"]').forEach((r) => { r.disabled = busy; });
+
+  // 各パネル内 UI
+  updateRecordPanelUI();
+  updateCameraButtonsEnabled();
+  updateGyroButtonVisibility();
+  const gyroBtn = document.getElementById('gyro-toggle');
+  if (gyroBtn) gyroBtn.disabled = busy;
+
+  // 変換ボタン
+  updateConvertButtonEnabled();
+}
+
+function updateConvertButtonEnabled() {
+  const btn = document.getElementById('convert-button');
+  if (!btn) return;
+  let enabled = !!state.image && !state.isConverting;
+  if (state.viewer && state.viewer.isRecording()) enabled = false;
+  if (state.viewer && state.viewer.isPlayingSequence && state.viewer.isPlayingSequence()) enabled = false;
+  if (state.mode === 'record' && !state.pendingRecordSamples) enabled = false;
+  if (state.mode === 'camera' && (state.cameraSteps.length === 0 || !state.cameraStart)) enabled = false;
+  btn.disabled = !enabled;
+}
+
+// ===== カメラワーク UI =====
 
 function initCameraWorkUI() {
   const list = document.getElementById('camera-step-list');
@@ -304,6 +359,7 @@ function initCameraWorkUI() {
     state.viewer.stopCameraPlayback();
     state.cameraStart = state.viewer.getCurrentView();
     updateCameraStartUI();
+    updateConvertButtonEnabled();
   });
 
   document.querySelectorAll('.camera-add-btn').forEach((btn) => {
@@ -421,12 +477,9 @@ function initCameraWorkUI() {
       alert('ステップを追加してください / Please add at least one step');
       return;
     }
-    if (state.viewer.isRecording()) return;
+    if (state.viewer.isRecording() || state.isConverting) return;
     playBtn.hidden = true;
     stopBtn.hidden = false;
-    // 再生中は録画ボタンを無効化（相互排他）
-    const recStart = document.getElementById('record-start');
-    if (recStart) recStart.disabled = true;
 
     // ブラウザ表示位置の都合でビューアが隠れていたら、再生前に可視領域へスクロール
     await ensureViewerVisible();
@@ -439,17 +492,18 @@ function initCameraWorkUI() {
       onEnd: () => {
         playBtn.hidden = false;
         stopBtn.hidden = true;
-        if (recStart) recStart.disabled = false;
+        updateConvertUI();
       },
     });
+    // 再生開始後に UI 反映（isPlayingSequence が true を返すようになってから）
+    updateConvertUI();
   });
 
   stopBtn.addEventListener('click', () => {
     state.viewer.stopCameraPlayback();
     playBtn.hidden = false;
     stopBtn.hidden = true;
-    const recStart = document.getElementById('record-start');
-    if (recStart) recStart.disabled = false;
+    updateConvertUI();
   });
 
   // ドラッグ中の挿入位置インジケータ
@@ -530,12 +584,16 @@ function updateCameraStartUI() {
 }
 
 function updateCameraButtonsEnabled() {
-  const ok = state.cameraStart !== null;
+  const hasStart = state.cameraStart !== null;
+  const busy = isBusy();
+  const editDisabled = !hasStart || busy;
   document
     .querySelectorAll('.camera-add-btn, .camera-add-pause-btn, .camera-add-zoom-btn, .camera-add-fig8-btn')
-    .forEach((b) => { b.disabled = !ok; });
-  document.getElementById('camera-preview-play').disabled = !ok;
-  document.getElementById('camera-steps-clear').disabled = !ok;
+    .forEach((b) => { b.disabled = editDisabled; });
+  document.getElementById('camera-preview-play').disabled = editDisabled;
+  document.getElementById('camera-steps-clear').disabled = editDisabled;
+  const setStartBtn = document.getElementById('camera-set-start');
+  if (setStartBtn) setStartBtn.disabled = busy;
 }
 
 async function ensureViewerVisible() {
@@ -736,9 +794,7 @@ function renderCameraSteps() {
 
   countEl.textContent = String(state.cameraSteps.length);
   updateCameraStepTotal();
-  updateDurationEnabledState();
-  // VR180 はステップの有無でパタパタ欄の表示が変わる
-  updateConvertUI();
+  updateConvertButtonEnabled();
 }
 
 function moveCameraStepTo(draggedId, targetId, after) {
@@ -807,19 +863,7 @@ function formatCameraStepLabel(step) {
   return '';
 }
 
-function updateDurationEnabledState() {
-  const durationInput = document.getElementById('duration');
-  const label = durationInput.closest('label');
-  const useSteps = isUsingCameraSteps();
-  durationInput.disabled = useSteps;
-  if (label) label.classList.toggle('is-disabled', useSteps);
-}
-
-function isUsingCameraSteps() {
-  // spatial はカメラワーク非対応（平面ステレオなので意味がない）
-  if (state.format === 'spatial') return false;
-  return state.cameraSteps.length > 0;
-}
+// ===== 変換（共通ルーティング） =====
 
 async function handleConvert() {
   if (!state.image) return;
@@ -827,74 +871,96 @@ async function handleConvert() {
     alert('録画中は変換できません。録画を停止してください / Cannot convert while recording. Please stop recording first.');
     return;
   }
+  if (state.isConverting) return;
 
-  const button = document.getElementById('convert-button');
+  const available = getAvailableModes(state.format);
+  if (!available.includes(state.mode)) {
+    alert('このフォーマットでは現在のモードは使用できません / Current mode is not available for this format');
+    return;
+  }
+
+  if (state.mode === 'record' && !state.pendingRecordSamples) {
+    alert('先に録画してください / Please record first');
+    return;
+  }
+  if (state.mode === 'camera') {
+    if (!state.cameraStart) {
+      alert('カメラワーク: 開始位置を設定してください / Camera Work: Please set a start position');
+      return;
+    }
+    if (state.cameraSteps.length === 0) {
+      alert('カメラワーク: ステップを追加してください / Camera Work: Please add at least one step');
+      return;
+    }
+  }
+
   const progressEl = document.getElementById('progress');
   const progressBar = document.getElementById('progress-bar');
   const progressText = document.getElementById('progress-text');
-  const recStart = document.getElementById('record-start');
 
-  button.disabled = true;
-  if (recStart) recStart.disabled = true;
+  state.isConverting = true;
+  updateConvertUI();
   progressEl.hidden = false;
   progressBar.value = 0;
   resetDownload();
 
   try {
-    let frames;
-    let fps;
-    let quality;
-    const isSpatial = state.format === 'spatial';
-    const is180 = state.format.endsWith('180');
-    const isFisheyeMono = state.format === 'fisheyeMono180';
-    const isFisheyeSbs = state.format === 'fisheyeSbs180';
-    const useCameraWork = isUsingCameraSteps();
-    // 魚眼モノラルはステレオペアを持たないのでパタパタ不可 → 非パタパタで回転フォールバック
-    const isPataPata = (is180 && !useCameraWork && !isFisheyeMono) || isSpatial;
+    const fps = parseInt(document.getElementById('fps').value, 10) || 30;
+    const [w, h] = document.getElementById('resolution').value.split(',').map(Number);
+    const quality = parseInt(document.getElementById('quality').value, 10) || 60;
+    const outputFormat = document.getElementById('output-format').value || 'webp';
+    const formatLabel = outputFormat === 'mp4' ? 'MP4' : 'WebP';
 
-    if (isPataPata) {
-      const cycles = parseInt(document.getElementById('cycles').value, 10) || 5;
-      const interval = parseFloat(document.getElementById('interval').value) || 0.3;
-      quality = parseInt(document.getElementById('quality180').value, 10) || 75;
-      fps = 30;
+    let frames;
+    let effectiveFps = fps;
+
+    if (state.mode === 'record') {
+      progressText.textContent = '録画フレーム生成中... / Generating frames from recording...';
+      const result = await state.viewer.captureRecordedSequence({
+        samples: state.pendingRecordSamples.samples,
+        width: w,
+        height: h,
+        fps,
+        onProgress: (p) => {
+          progressBar.value = p * 0.4;
+          progressText.textContent = `録画フレーム生成中 / Generating frames... ${Math.round(p * 100)}%`;
+        },
+      });
+      frames = result.frames;
+    } else if (state.mode === 'patapata') {
+      const cycles = parseInt(document.getElementById('cycles').value, 10) || 1;
+      const interval = parseFloat(document.getElementById('interval').value) || 0.1;
+      const isSpatial = state.format === 'spatial';
+      const isFisheyeSbs = state.format === 'fisheyeSbs180';
 
       progressText.textContent = 'パタパタフレーム生成中... / Generating pata-pata frames...';
       // 空間写真と魚眼 SBS は SBS 合成済みとして sbs180 レイアウトで処理
       const layout = (isSpatial || isFisheyeSbs) ? 'sbs180' : state.format;
       const pataImage = isFisheyeSbs ? state.displayImage : state.image;
-      const result = await captureVR180PataPata(pataImage, layout, {
-        cycles, interval, fps,
-      });
+      const result = await captureVR180PataPata(pataImage, layout, { cycles, interval, fps });
       frames = result.frames;
+      effectiveFps = result.fps;
       progressBar.value = 0.4;
     } else {
-      fps = parseInt(document.getElementById('fps').value, 10) || 30;
-      const [w, h] = document.getElementById('resolution').value.split(',').map(Number);
-      quality = parseInt(document.getElementById('quality').value, 10) || 75;
+      // simple / camera
+      const isFisheyeMono = state.format === 'fisheyeMono180';
+      let steps;
+      let startView;
+      const isCustom = state.mode === 'camera';
+      if (isCustom) {
+        steps = state.cameraSteps;
+        startView = state.cameraStart;
+      } else {
+        const defaultDelta = isFisheyeMono ? -170 : -360;
+        const duration = parseFloat(document.getElementById('duration').value) || 20;
+        steps = [{ type: 'rotate', axis: 'lon', delta: defaultDelta, duration }];
+        startView = { lon: 0, lat: 0, fov: 75 };
+      }
 
-      // ステップ未設定時のデフォルト: 360° 系は一回転、魚眼 mono 180° は水平スイープ
-      const defaultDelta = isFisheyeMono ? -170 : -360;
-      const steps = state.cameraSteps.length > 0
-        ? state.cameraSteps
-        : [{
-            type: 'rotate',
-            axis: 'lon',
-            delta: defaultDelta,
-            duration: parseFloat(document.getElementById('duration').value) || 5,
-          }];
-
-      const isCustom = state.cameraSteps.length > 0;
+      state.viewer.stopCameraPlayback();
       progressText.textContent = isCustom
         ? 'カメラワークからフレーム生成中... / Generating frames from camera work...'
-        : '360° 回転フレーム生成中... / Generating 360° rotation frames...';
-
-      // 再生中なら止めてから
-      state.viewer.stopCameraPlayback();
-
-      // カメラワーク時は開始位置から、未指定時は初期位置から
-      const startView = isCustom
-        ? state.cameraStart
-        : { lon: 0, lat: 0, fov: 75 };
+        : '回転フレーム生成中... / Generating rotation frames...';
 
       const result = await state.viewer.captureCameraSequence({
         steps,
@@ -904,28 +970,23 @@ async function handleConvert() {
         fps,
         onProgress: (p) => {
           progressBar.value = p * 0.4;
-          const prefix = isCustom ? 'カメラワーク / Camera work' : '360° 回転 / 360° rotation';
+          const prefix = isCustom ? 'カメラワーク / Camera work' : '回転 / Rotation';
           progressText.textContent = `${prefix} フレーム生成中 / Generating frames... ${Math.round(p * 100)}%`;
         },
       });
       frames = result.frames;
     }
 
-    const outputFormat = document.getElementById('output-format').value || 'webp';
-    const formatLabel = outputFormat === 'mp4' ? 'MP4' : 'WebP';
-
     const outBlob = await framesToVideo(
       frames,
-      fps,
+      effectiveFps,
       quality,
       outputFormat,
       (p) => {
         progressBar.value = 0.4 + p * 0.6;
         progressText.textContent = `${formatLabel} エンコード中 / Encoding... ${Math.round(p * 100)}%`;
       },
-      (msg) => {
-        progressText.textContent = msg;
-      }
+      (msg) => { progressText.textContent = msg; }
     );
 
     progressBar.value = 1;
@@ -934,25 +995,48 @@ async function handleConvert() {
     const link = document.getElementById('download-link');
     const url = URL.createObjectURL(outBlob);
     link.href = url;
-    let prefix;
-    if (isFisheyeMono) prefix = useCameraWork ? 'fisheye180_mono_camera' : 'fisheye180_mono';
-    else if (isFisheyeSbs) prefix = useCameraWork ? 'fisheye180_sbs_camera' : 'fisheye180_sbs_patapata';
-    else if (useCameraWork && is180) prefix = 'vr180_camera';
-    else if (isSpatial) prefix = 'spatial_patapata';
-    else if (is180) prefix = 'vr180_patapata';
-    else prefix = 'rotation360';
-    link.download = `${prefix}_${timestamp()}.${outputFormat}`;
+    link.download = `${buildOutputPrefix()}_${timestamp()}.${outputFormat}`;
     link.textContent = `ダウンロード / Download (${(outBlob.size / 1024).toFixed(0)} KB)`;
     link.hidden = false;
     link.dataset.kind = outputFormat === 'mp4' ? 'video' : 'image';
     document.getElementById('preview-button').hidden = false;
+
+    // 録画モードで変換し終えたら結果が見えるようにスクロール
+    if (state.mode === 'record') {
+      document.getElementById('result-actions').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   } catch (err) {
     console.error(err);
     progressText.textContent = 'エラー / Error: ' + err.message;
   } finally {
-    button.disabled = false;
-    if (recStart) recStart.disabled = state.format === 'spatial';
+    state.isConverting = false;
+    updateConvertUI();
   }
+}
+
+function buildOutputPrefix() {
+  const f = state.format;
+  const m = state.mode;
+  if (m === 'record') {
+    if (f === 'fisheyeMono180') return 'recording_fisheye180_mono';
+    if (f === 'fisheyeSbs180') return 'recording_fisheye180_sbs';
+    if (f.endsWith('180')) return 'recording_vr180';
+    return 'recording_360';
+  }
+  if (m === 'camera') {
+    if (f === 'fisheyeMono180') return 'fisheye180_mono_camera';
+    if (f === 'fisheyeSbs180') return 'fisheye180_sbs_camera';
+    if (f.endsWith('180')) return 'vr180_camera';
+    return 'rotation360_camera';
+  }
+  if (m === 'patapata') {
+    if (f === 'spatial') return 'spatial_patapata';
+    if (f === 'fisheyeSbs180') return 'fisheye180_sbs_patapata';
+    return 'vr180_patapata';
+  }
+  // simple
+  if (f === 'fisheyeMono180') return 'fisheye180_mono';
+  return 'rotation360';
 }
 
 // ===== ジャイロ UI =====
@@ -1003,9 +1087,10 @@ function updateGyroButtonState(active) {
 function initRecorderUI() {
   const startBtn = document.getElementById('record-start');
   const stopBtn = document.getElementById('record-stop');
+  const discardBtn = document.getElementById('record-discard');
   const elapsedEl = document.getElementById('record-elapsed');
 
-  startBtn.addEventListener('click', () => {
+  startBtn.addEventListener('click', async () => {
     if (!state.image) {
       alert('画像を読み込んでから録画を開始してください / Please load an image before starting recording');
       return;
@@ -1014,17 +1099,24 @@ function initRecorderUI() {
       alert('カメラワーク再生中は録画できません。停止してから再試行してください / Cannot record while camera work is playing. Please stop it first.');
       return;
     }
+    if (state.isConverting) return;
+
     try {
       state.viewer.startRecording();
     } catch (err) {
       alert(err.message);
       return;
     }
-    setRecordingUILocked(true);
-    startBtn.hidden = true;
-    stopBtn.hidden = false;
+
+    // 新しい録画を始めたら以前の保持サンプルは破棄
+    state.pendingRecordSamples = null;
+
     document.getElementById('record-indicator').hidden = false;
     elapsedEl.textContent = '0.0s';
+    updateConvertUI();
+
+    // ビューアを画面内に（ドラッグしてもらう導線）
+    ensureViewerVisible();
 
     const tick = () => {
       if (!state.viewer.isRecording()) return;
@@ -1035,24 +1127,26 @@ function initRecorderUI() {
     state.recordTimerRaf = requestAnimationFrame(tick);
   });
 
-  stopBtn.addEventListener('click', async () => {
+  stopBtn.addEventListener('click', () => {
     if (state.recordTimerRaf) {
       cancelAnimationFrame(state.recordTimerRaf);
       state.recordTimerRaf = 0;
     }
     const result = state.viewer.stopRecording();
-    startBtn.hidden = false;
-    stopBtn.hidden = true;
     document.getElementById('record-indicator').hidden = true;
 
     if (!result || result.duration < 0.5 || !result.samples || result.samples.length < 2) {
       alert('録画が短すぎます（0.5 秒以上録画してください） / Recording too short (please record at least 0.5 seconds)');
-      setRecordingUILocked(false);
-      return;
+      state.pendingRecordSamples = null;
+    } else {
+      state.pendingRecordSamples = { samples: result.samples, duration: result.duration };
     }
+    updateConvertUI();
+  });
 
-    await runRecordConvert(result.samples);
-    setRecordingUILocked(false);
+  discardBtn.addEventListener('click', () => {
+    state.pendingRecordSamples = null;
+    updateConvertUI();
   });
 }
 
@@ -1064,128 +1158,62 @@ function cancelRecording() {
   if (state.viewer && state.viewer.isRecording()) {
     state.viewer.stopRecording();
   }
-  document.getElementById('record-start').hidden = false;
-  document.getElementById('record-stop').hidden = true;
   document.getElementById('record-indicator').hidden = true;
-  setRecordingUILocked(false);
+  updateConvertUI();
 }
 
-function updateRecorderUI() {
+function updateRecordPanelUI() {
   const startBtn = document.getElementById('record-start');
   const stopBtn = document.getElementById('record-stop');
-  const hint = document.getElementById('record-hint');
+  const discardBtn = document.getElementById('record-discard');
+  const statusEl = document.getElementById('record-status');
   if (!startBtn) return;
-  const isSpatial = state.format === 'spatial';
 
-  if (isSpatial) {
-    // 録画中に spatial に切替された場合も想定して cancel
-    if (state.viewer && state.viewer.isRecording()) cancelRecording();
+  const recording = state.viewer && state.viewer.isRecording();
+  const available = getAvailableModes(state.format).includes('record');
+
+  if (!available) {
+    // 録画対応外のフォーマット（spatial）— 録画中なら中断
+    if (recording) cancelRecording();
     startBtn.hidden = true;
     stopBtn.hidden = true;
-    if (hint) {
-      hint.textContent = '空間写真（平面ステレオ）は「フリー作成」非対応です / Spatial photos (planar stereo) do not support Free mode recording';
-      hint.hidden = false;
-    }
+    discardBtn.hidden = true;
+    statusEl.className = 'record-status is-empty';
+    statusEl.textContent = 'このフォーマットは録画に対応していません / This format does not support recording';
+    return;
+  }
+
+  if (recording) {
+    startBtn.hidden = true;
+    stopBtn.hidden = false;
+    discardBtn.hidden = true;
+    statusEl.className = 'record-status is-recording';
+    statusEl.textContent = '録画中 — ビューアをドラッグしてください / Recording — drag the viewer';
+    return;
+  }
+
+  startBtn.hidden = false;
+  startBtn.disabled = state.isConverting || !state.image;
+  stopBtn.hidden = true;
+
+  if (!state.image) {
+    discardBtn.hidden = true;
+    statusEl.className = 'record-status is-empty';
+    statusEl.textContent = '画像をアップロードしてください / Please upload an image first';
+    return;
+  }
+
+  if (state.pendingRecordSamples) {
+    const d = state.pendingRecordSamples.duration.toFixed(1);
+    const n = state.pendingRecordSamples.samples.length;
+    discardBtn.hidden = false;
+    discardBtn.disabled = state.isConverting;
+    statusEl.className = 'record-status';
+    statusEl.textContent = `録画データ保持中 / Recording held: ${d} 秒 / sec (${n} サンプル / samples) — 上の出力設定を調整して「変換開始」を押してください / Adjust settings above, then click Convert`;
   } else {
-    if (!state.viewer || !state.viewer.isRecording()) {
-      startBtn.hidden = false;
-      stopBtn.hidden = true;
-    }
-    if (hint) {
-      hint.textContent = '';
-      hint.hidden = true;
-    }
-  }
-  updateGyroButtonVisibility();
-}
-
-function setRecordingUILocked(locked) {
-  // 録画中は他の操作（変換／カメラワーク編集／フォーマット切替／ジャイロ切替）をロック
-  document.getElementById('convert-button').disabled = locked;
-  document.querySelectorAll('input[name="format"]').forEach((r) => { r.disabled = locked; });
-  const editBtns = document.querySelectorAll(
-    '.camera-add-btn, .camera-add-pause-btn, .camera-add-zoom-btn, .camera-add-fig8-btn'
-  );
-  editBtns.forEach((b) => { b.disabled = locked; });
-  document.getElementById('camera-preview-play').disabled = locked;
-  document.getElementById('camera-preview-stop').disabled = locked;
-  document.getElementById('camera-set-start').disabled = locked;
-  document.getElementById('camera-steps-clear').disabled = locked;
-  const gyroBtn = document.getElementById('gyro-toggle');
-  if (gyroBtn) gyroBtn.disabled = locked;
-  if (!locked) {
-    // ロック解除時は開始位置の有無に応じた本来の状態を再適用
-    updateCameraButtonsEnabled();
-    document.getElementById('camera-set-start').disabled = false;
-  }
-}
-
-async function runRecordConvert(samples) {
-  const progressEl = document.getElementById('progress');
-  const progressBar = document.getElementById('progress-bar');
-  const progressText = document.getElementById('progress-text');
-  const convertBtn = document.getElementById('convert-button');
-
-  convertBtn.disabled = true;
-  progressEl.hidden = false;
-  progressBar.value = 0;
-  resetDownload();
-
-  try {
-    const fps = parseInt(document.getElementById('fps').value, 10) || 30;
-    const [w, h] = document.getElementById('resolution').value.split(',').map(Number);
-    const quality = parseInt(document.getElementById('quality').value, 10) || 75;
-
-    progressText.textContent = '録画フレーム生成中... / Generating frames from recording...';
-
-    const { frames } = await state.viewer.captureRecordedSequence({
-      samples,
-      width: w,
-      height: h,
-      fps,
-      onProgress: (p) => {
-        progressBar.value = p * 0.4;
-        progressText.textContent = `録画フレーム生成中 / Generating frames from recording... ${Math.round(p * 100)}%`;
-      },
-    });
-
-    const outputFormat = document.getElementById('output-format').value || 'webp';
-    const formatLabel = outputFormat === 'mp4' ? 'MP4' : 'WebP';
-
-    const outBlob = await framesToVideo(
-      frames, fps, quality, outputFormat,
-      (p) => {
-        progressBar.value = 0.4 + p * 0.6;
-        progressText.textContent = `${formatLabel} エンコード中 / Encoding... ${Math.round(p * 100)}%`;
-      },
-      (msg) => { progressText.textContent = msg; }
-    );
-
-    progressBar.value = 1;
-    progressText.textContent = `完了 / Done: ${(outBlob.size / 1024).toFixed(0)} KB / ${frames.length} フレーム / frames`;
-
-    const link = document.getElementById('download-link');
-    const url = URL.createObjectURL(outBlob);
-    link.href = url;
-    const is180 = state.format.endsWith('180');
-    let prefix;
-    if (state.format === 'fisheyeMono180') prefix = 'recording_fisheye180_mono';
-    else if (state.format === 'fisheyeSbs180') prefix = 'recording_fisheye180_sbs';
-    else if (is180) prefix = 'recording_vr180';
-    else prefix = 'recording_360';
-    link.download = `${prefix}_${timestamp()}.${outputFormat}`;
-    link.textContent = `ダウンロード / Download (${(outBlob.size / 1024).toFixed(0)} KB)`;
-    link.hidden = false;
-    link.dataset.kind = outputFormat === 'mp4' ? 'video' : 'image';
-    document.getElementById('preview-button').hidden = false;
-
-    // 結果が見えるようにスクロール
-    document.getElementById('result-actions').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  } catch (err) {
-    console.error(err);
-    progressText.textContent = 'エラー / Error: ' + err.message;
-  } finally {
-    convertBtn.disabled = false;
+    discardBtn.hidden = true;
+    statusEl.className = 'record-status is-empty';
+    statusEl.textContent = '録画データなし — 上の「録画開始」を押してビューアをドラッグ / No recording — click Start Recording and drag the viewer';
   }
 }
 
