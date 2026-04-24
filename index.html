@@ -122,15 +122,20 @@
             </label>
             <label>解像度 <span class="en">/ Resolution</span>
               <select id="resolution">
+                <option value="256,256">256 × 256 (テスト用 / Test)</option>
+                <option value="384,384">384 × 384</option>
                 <option value="512,512">512 × 512</option>
                 <option value="768,768">768 × 768</option>
                 <option value="1024,1024">1024 × 1024</option>
+                <option value="640,360">640 × 360 (16:9)</option>
                 <option value="960,540" selected>960 × 540 (16:9)</option>
                 <option value="1280,720">1280 × 720 (16:9)</option>
               </select>
             </label>
             <label>品質 <span class="en">/ Quality</span>
               <select id="quality">
+                <option value="20">テスト用 / Test (q=20)</option>
+                <option value="40">最軽量 / Lowest (q=40)</option>
                 <option value="60" selected>軽量 / Light (q=60)</option>
                 <option value="75">標準 / Standard (q=75)</option>
                 <option value="90">高画質 / High (q=90)</option>
@@ -206,6 +211,8 @@
           </label>
           <label>品質 <span class="en">/ Quality</span>
             <select id="quality180">
+              <option value="20">テスト用 / Test (q=20)</option>
+              <option value="40">最軽量 / Lowest (q=40)</option>
               <option value="60">軽量 / Light (q=60)</option>
               <option value="75" selected>標準 / Standard (q=75)</option>
               <option value="90">高画質 / High (q=90)</option>
