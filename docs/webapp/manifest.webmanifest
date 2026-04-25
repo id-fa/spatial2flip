@@ -22,5 +22,21 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "spatial2flip — 360°/VR 画像をブラウザでプレビュー＆動画化"
+    },
+    {
+      "src": "icons/screenshot-narrow.png",
+      "sizes": "540x953",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "spatial2flip — モバイルでも 360°/VR を WebP / MP4 に変換"
+    }
   ]
 }

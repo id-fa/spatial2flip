@@ -8,7 +8,7 @@
 //
 // バージョン変更時は CACHE_VERSION を上げると古いキャッシュが掃除される。
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `spatial2flip-${CACHE_VERSION}`;
 
 // 同一オリジンの App Shell。install 時に確実にキャッシュする。
@@ -25,6 +25,8 @@ const APP_SHELL = [
   './icons/favicon.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/screenshot-wide.png',
+  './icons/screenshot-narrow.png',
 ];
 
 // CDN 上の大物（Three.js / ffmpeg.wasm / libheif）。activate 後にバックグラウンド取得。
