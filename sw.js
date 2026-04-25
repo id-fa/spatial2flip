@@ -8,7 +8,7 @@
 //
 // バージョン変更時は CACHE_VERSION を上げると古いキャッシュが掃除される。
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `spatial2flip-${CACHE_VERSION}`;
 
 // 同一オリジンの App Shell。install 時に確実にキャッシュする。
